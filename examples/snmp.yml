@@ -1,0 +1,300 @@
+# Configuração Otimizada do SNMP Exporter
+# Módulos para diferentes tipos de dispositivos de rede
+
+# === MÓDULO PADRÃO - INTERFACES DE REDE ===
+if_mib:
+  walk:
+    # Interface Statistics (RFC 2863)
+    - 1.3.6.1.2.1.2.2.1.2   # ifDescr
+    - 1.3.6.1.2.1.2.2.1.3   # ifType
+    - 1.3.6.1.2.1.2.2.1.5   # ifSpeed
+    - 1.3.6.1.2.1.2.2.1.7   # ifAdminStatus
+    - 1.3.6.1.2.1.2.2.1.8   # ifOperStatus
+    - 1.3.6.1.2.1.2.2.1.10  # ifInOctets
+    - 1.3.6.1.2.1.2.2.1.11  # ifInUcastPkts
+    - 1.3.6.1.2.1.2.2.1.12  # ifInNUcastPkts
+    - 1.3.6.1.2.1.2.2.1.13  # ifInDiscards
+    - 1.3.6.1.2.1.2.2.1.14  # ifInErrors
+    - 1.3.6.1.2.1.2.2.1.16  # ifOutOctets
+    - 1.3.6.1.2.1.2.2.1.17  # ifOutUcastPkts
+    - 1.3.6.1.2.1.2.2.1.18  # ifOutNUcastPkts
+    - 1.3.6.1.2.1.2.2.1.19  # ifOutDiscards
+    - 1.3.6.1.2.1.2.2.1.20  # ifOutErrors
+    
+    # High Capacity Counters (RFC 3273) - Para interfaces > 20Mbps
+    - 1.3.6.1.2.1.31.1.1.1.1   # ifName
+    - 1.3.6.1.2.1.31.1.1.1.6   # ifHCInOctets
+    - 1.3.6.1.2.1.31.1.1.1.10  # ifHCOutOctets
+    - 1.3.6.1.2.1.31.1.1.1.15  # ifHighSpeed
+    - 1.3.6.1.2.1.31.1.1.1.18  # ifAlias
+  
+  lookups:
+    - source_indexes: [ifIndex]
+      lookup: 1.3.6.1.2.1.2.2.1.2  # ifDescr
+      drop_source_indexes: false
+    - source_indexes: [ifIndex]
+      lookup: 1.3.6.1.2.1.31.1.1.1.1  # ifName
+      drop_source_indexes: false
+  
+  overrides:
+    ifType:
+      type: EnumAsInfo
+    ifAdminStatus:
+      type: EnumAsStateSet
+    ifOperStatus:
+      type: EnumAsStateSet
+
+# === UBIQUITI UNIFI - ACCESS POINTS ===
+unifi_ap:
+  walk:
+    # System Information
+    - 1.3.6.1.2.1.1.1.0     # sysDescr
+    - 1.3.6.1.2.1.1.3.0     # sysUpTime
+    - 1.3.6.1.2.1.1.5.0     # sysName
+    
+    # Interface Statistics (herda do if_mib)
+    - 1.3.6.1.2.1.2.2.1.2   # ifDescr
+    - 1.3.6.1.2.1.2.2.1.8   # ifOperStatus
+    - 1.3.6.1.2.1.2.2.1.10  # ifInOctets
+    - 1.3.6.1.2.1.2.2.1.16  # ifOutOctets
+    
+    # Wireless Statistics (UniFi específico)
+    - 1.3.6.1.4.1.41112.1.4.1.1.3   # unifiApSystemModel
+    - 1.3.6.1.4.1.41112.1.4.1.1.4   # unifiApSystemVersion
+    - 1.3.6.1.4.1.41112.1.4.5.1.2   # unifiRadioName
+    - 1.3.6.1.4.1.41112.1.4.5.1.4   # unifiRadioChannel
+    - 1.3.6.1.4.1.41112.1.4.5.1.7   # unifiRadioTxPower
+    - 1.3.6.1.4.1.41112.1.4.5.1.14  # unifiRadioNumStations
+    
+    # VAP (Virtual Access Point) Statistics
+    - 1.3.6.1.4.1.41112.1.4.7.1.2   # unifiVapName
+    - 1.3.6.1.4.1.41112.1.4.7.1.3   # unifiVapRadio
+    - 1.3.6.1.4.1.41112.1.4.7.1.5   # unifiVapNumStations
+    - 1.3.6.1.4.1.41112.1.4.7.1.15  # unifiVapRxBytes
+    - 1.3.6.1.4.1.41112.1.4.7.1.16  # unifiVapTxBytes
+  
+  lookups:
+    - source_indexes: [unifiRadioIndex]
+      lookup: 1.3.6.1.4.1.41112.1.4.5.1.2  # unifiRadioName
+    - source_indexes: [unifiVapIndex]
+      lookup: 1.3.6.1.4.1.41112.1.4.7.1.2  # unifiVapName
+  
+  overrides:
+    unifiApSystemModel:
+      type: DisplayString
+    unifiRadioName:
+      type: DisplayString
+    unifiVapName:
+      type: DisplayString
+
+# === PFSENSE FIREWALL ===
+pfsense:
+  walk:
+    # System Information
+    - 1.3.6.1.2.1.1.1.0     # sysDescr
+    - 1.3.6.1.2.1.1.3.0     # sysUpTime
+    - 1.3.6.1.2.1.1.5.0     # sysName
+    
+    # Interface Statistics
+    - 1.3.6.1.2.1.2.2.1.2   # ifDescr
+    - 1.3.6.1.2.1.2.2.1.8   # ifOperStatus
+    - 1.3.6.1.2.1.2.2.1.10  # ifInOctets
+    - 1.3.6.1.2.1.2.2.1.16  # ifOutOctets
+    
+    # CPU and Memory (UCD-SNMP-MIB)
+    - 1.3.6.1.4.1.2021.11.9.0   # ssCpuIdle
+    - 1.3.6.1.4.1.2021.11.10.0  # ssCpuSystem
+    - 1.3.6.1.4.1.2021.11.11.0  # ssCpuUser
+    - 1.3.6.1.4.1.2021.4.5.0    # memTotalReal
+    - 1.3.6.1.4.1.2021.4.6.0    # memAvailReal
+    - 1.3.6.1.4.1.2021.4.11.0   # memTotalSwap
+    - 1.3.6.1.4.1.2021.4.12.0   # memAvailSwap
+    
+    # Disk Usage
+    - 1.3.6.1.4.1.2021.9.1.2    # dskPath
+    - 1.3.6.1.4.1.2021.9.1.6    # dskTotal
+    - 1.3.6.1.4.1.2021.9.1.7    # dskAvail
+    - 1.3.6.1.4.1.2021.9.1.8    # dskUsed
+    - 1.3.6.1.4.1.2021.9.1.9    # dskPercent
+    
+    # Load Average
+    - 1.3.6.1.4.1.2021.10.1.3.1  # laLoad.1 (1min)
+    - 1.3.6.1.4.1.2021.10.1.3.2  # laLoad.5 (5min)
+    - 1.3.6.1.4.1.2021.10.1.3.3  # laLoad.15 (15min)
+  
+  lookups:
+    - source_indexes: [dskIndex]
+      lookup: 1.3.6.1.4.1.2021.9.1.2  # dskPath
+  
+  overrides:
+    dskPath:
+      type: DisplayString
+
+# === CISCO SWITCHES ===
+cisco_switch:
+  walk:
+    # System Information
+    - 1.3.6.1.2.1.1.1.0     # sysDescr
+    - 1.3.6.1.2.1.1.3.0     # sysUpTime
+    - 1.3.6.1.2.1.1.5.0     # sysName
+    
+    # Interface Statistics (padrão)
+    - 1.3.6.1.2.1.2.2.1.2   # ifDescr
+    - 1.3.6.1.2.1.2.2.1.8   # ifOperStatus
+    - 1.3.6.1.2.1.2.2.1.10  # ifInOctets
+    - 1.3.6.1.2.1.2.2.1.16  # ifOutOctets
+    
+    # CPU Utilization (CISCO-PROCESS-MIB)
+    - 1.3.6.1.4.1.9.9.109.1.1.1.1.5   # cpmCPUTotal5min
+    - 1.3.6.1.4.1.9.9.109.1.1.1.1.6   # cpmCPUTotal1min
+    - 1.3.6.1.4.1.9.9.109.1.1.1.1.7   # cpmCPUTotal5sec
+    
+    # Memory Utilization (CISCO-MEMORY-POOL-MIB)
+    - 1.3.6.1.4.1.9.9.48.1.1.1.2      # ciscoMemoryPoolName
+    - 1.3.6.1.4.1.9.9.48.1.1.1.5      # ciscoMemoryPoolUsed
+    - 1.3.6.1.4.1.9.9.48.1.1.1.6      # ciscoMemoryPoolFree
+    
+    # Temperature (CISCO-ENVMON-MIB)
+    - 1.3.6.1.4.1.9.9.13.1.3.1.2      # ciscoEnvMonTemperatureDescr
+    - 1.3.6.1.4.1.9.9.13.1.3.1.3      # ciscoEnvMonTemperatureValue
+    - 1.3.6.1.4.1.9.9.13.1.3.1.6      # ciscoEnvMonTemperatureState
+    
+    # Fan Status
+    - 1.3.6.1.4.1.9.9.13.1.4.1.2      # ciscoEnvMonFanDescr
+    - 1.3.6.1.4.1.9.9.13.1.4.1.3      # ciscoEnvMonFanState
+    
+    # Power Supply Status
+    - 1.3.6.1.4.1.9.9.13.1.5.1.2      # ciscoEnvMonSupplyDescr
+    - 1.3.6.1.4.1.9.9.13.1.5.1.3      # ciscoEnvMonSupplyState
+  
+  lookups:
+    - source_indexes: [ciscoMemoryPoolType]
+      lookup: 1.3.6.1.4.1.9.9.48.1.1.1.2  # ciscoMemoryPoolName
+    - source_indexes: [ciscoEnvMonTemperatureStatusIndex]
+      lookup: 1.3.6.1.4.1.9.9.13.1.3.1.2  # ciscoEnvMonTemperatureDescr
+  
+  overrides:
+    ciscoMemoryPoolName:
+      type: DisplayString
+    ciscoEnvMonTemperatureDescr:
+      type: DisplayString
+    ciscoEnvMonTemperatureState:
+      type: EnumAsStateSet
+    ciscoEnvMonFanState:
+      type: EnumAsStateSet
+    ciscoEnvMonSupplyState:
+      type: EnumAsStateSet
+
+# === MIKROTIK ROUTEROS ===
+mikrotik:
+  walk:
+    # System Information
+    - 1.3.6.1.2.1.1.1.0     # sysDescr
+    - 1.3.6.1.2.1.1.3.0     # sysUpTime
+    - 1.3.6.1.2.1.1.5.0     # sysName
+    
+    # Interface Statistics
+    - 1.3.6.1.2.1.2.2.1.2   # ifDescr
+    - 1.3.6.1.2.1.2.2.1.8   # ifOperStatus
+    - 1.3.6.1.2.1.2.2.1.10  # ifInOctets
+    - 1.3.6.1.2.1.2.2.1.16  # ifOutOctets
+    
+    # MikroTik Specific (MIKROTIK-MIB)
+    - 1.3.6.1.4.1.14988.1.1.1.2.0   # mtxrLicSoftwareId
+    - 1.3.6.1.4.1.14988.1.1.1.3.0   # mtxrLicUpgradeUntil
+    - 1.3.6.1.4.1.14988.1.1.3.2.0   # mtxrHlCoreVoltage
+    - 1.3.6.1.4.1.14988.1.1.3.3.0   # mtxrHlThreeDotThreeVoltage
+    - 1.3.6.1.4.1.14988.1.1.3.4.0   # mtxrHlFiveVoltage
+    - 1.3.6.1.4.1.14988.1.1.3.5.0   # mtxrHlTwelveVoltage
+    - 1.3.6.1.4.1.14988.1.1.3.6.0   # mtxrHlSensorTemperature
+    - 1.3.6.1.4.1.14988.1.1.3.7.0   # mtxrHlCpuTemperature
+    - 1.3.6.1.4.1.14988.1.1.3.8.0   # mtxrHlBoardTemperature
+    - 1.3.6.1.4.1.14988.1.1.3.10.0  # mtxrHlProcessorFrequency
+    - 1.3.6.1.4.1.14988.1.1.3.11.0  # mtxrHlPowerConsumption
+    - 1.3.6.1.4.1.14988.1.1.3.12.0  # mtxrHlCurrent
+    - 1.3.6.1.4.1.14988.1.1.3.13.0  # mtxrHlProcessorTemperature
+    - 1.3.6.1.4.1.14988.1.1.3.14.0  # mtxrHlPower
+    - 1.3.6.1.4.1.14988.1.1.3.15.0  # mtxrHlFanSpeed1
+    - 1.3.6.1.4.1.14988.1.1.3.16.0  # mtxrHlFanSpeed2
+
+# === WINDOWS SERVER (via SNMP) ===
+windows_server:
+  walk:
+    # System Information
+    - 1.3.6.1.2.1.1.1.0     # sysDescr
+    - 1.3.6.1.2.1.1.3.0     # sysUpTime
+    - 1.3.6.1.2.1.1.5.0     # sysName
+    
+    # Interface Statistics
+    - 1.3.6.1.2.1.2.2.1.2   # ifDescr
+    - 1.3.6.1.2.1.2.2.1.8   # ifOperStatus
+    - 1.3.6.1.2.1.2.2.1.10  # ifInOctets
+    - 1.3.6.1.2.1.2.2.1.16  # ifOutOctets
+    
+    # Host Resources (HOST-RESOURCES-MIB)
+    - 1.3.6.1.2.1.25.1.1.0      # hrSystemUptime
+    - 1.3.6.1.2.1.25.1.6.0      # hrSystemProcesses
+    - 1.3.6.1.2.1.25.1.7.0      # hrSystemMaxProcesses
+    
+    # Storage Information
+    - 1.3.6.1.2.1.25.2.3.1.2    # hrStorageDescr
+    - 1.3.6.1.2.1.25.2.3.1.3    # hrStorageType
+    - 1.3.6.1.2.1.25.2.3.1.4    # hrStorageAllocationUnits
+    - 1.3.6.1.2.1.25.2.3.1.5    # hrStorageSize
+    - 1.3.6.1.2.1.25.2.3.1.6    # hrStorageUsed
+    
+    # Processor Information
+    - 1.3.6.1.2.1.25.3.3.1.2    # hrProcessorLoad
+  
+  lookups:
+    - source_indexes: [hrStorageIndex]
+      lookup: 1.3.6.1.2.1.25.2.3.1.2  # hrStorageDescr
+  
+  overrides:
+    hrStorageDescr:
+      type: DisplayString
+    hrStorageType:
+      type: EnumAsInfo
+
+# === CONFIGURAÇÕES DE AUTENTICAÇÃO ===
+# 
+# Para dispositivos com autenticação SNMP v2c:
+# auth:
+#   community: public
+#
+# Para dispositivos com SNMP v3:
+# auth:
+#   security_level: authPriv
+#   username: monitoring
+#   password: senha_auth
+#   auth_protocol: SHA
+#   priv_protocol: AES
+#   priv_password: senha_priv
+#   context_name: ""
+
+# === NOTAS DE CONFIGURAÇÃO ===
+#
+# 1. PERFORMANCE:
+#    - Use walk apenas para OIDs necessários
+#    - Evite walk em tabelas muito grandes
+#    - Configure timeout adequado no Prometheus
+#
+# 2. SEGURANÇA:
+#    - Use SNMP v3 sempre que possível
+#    - Configure communities específicas por dispositivo
+#    - Limite acesso SNMP por IP/rede
+#
+# 3. MONITORAMENTO:
+#    - Teste cada módulo individualmente
+#    - Monitore tempo de resposta dos targets
+#    - Configure alertas para falhas de SNMP
+#
+# 4. MANUTENÇÃO:
+#    - Documente OIDs customizados
+#    - Mantenha backup das configurações
+#    - Teste após atualizações de firmware
+#
+# 5. TROUBLESHOOTING:
+#    - Use snmpwalk para testar OIDs
+#    - Verifique logs do SNMP Exporter
+#    - Monitore métricas do próprio exporter

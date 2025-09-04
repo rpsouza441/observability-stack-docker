@@ -1,0 +1,104 @@
+# Dados persistentes
+prometheus_data/
+grafana_data/
+alertmanager_data/
+
+# Arquivos de ambiente
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Arquivos temporários
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Node.js (caso adicione ferramentas JS)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python (caso adicione scripts Python)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Grafana
+grafana/grafana.db
+grafana/sessions/
+
+# Prometheus
+prometheus/data/
+
+# Alertmanager
+alertmanager/data/
+
+# Configurações locais específicas
+config.local.yml
+prometheus.local.yml
+alertmanager.local.yml
+
+# Arquivos de teste
+test_*
+*.test
+
+# Documentação gerada
+docs/_build/
+
+# Cache
+.cache/
+*.cache

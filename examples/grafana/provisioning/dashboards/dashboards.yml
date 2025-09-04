@@ -1,0 +1,356 @@
+# ============================================================================
+# GRAFANA DASHBOARDS - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Configuração de provisioning de dashboards do Grafana
+# Organizada por categoria e responsabilidade
+# ============================================================================
+
+apiVersion: 1
+
+# ========================================
+# PROVIDERS DE DASHBOARDS
+# ========================================
+providers:
+  # Dashboards de Infraestrutura
+  - name: 'infrastructure'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/infrastructure
+      foldersFromFilesStructure: true
+
+  # Dashboards de Aplicações
+  - name: 'applications'
+    orgId: 1
+    folder: 'Applications'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/applications
+      foldersFromFilesStructure: true
+
+  # Dashboards de Rede
+  - name: 'network'
+    orgId: 1
+    folder: 'Network'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/network
+      foldersFromFilesStructure: true
+
+  # Dashboards de Banco de Dados
+  - name: 'database'
+    orgId: 1
+    folder: 'Database'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/database
+      foldersFromFilesStructure: true
+
+  # Dashboards de Kubernetes
+  - name: 'kubernetes'
+    orgId: 1
+    folder: 'Kubernetes'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/kubernetes
+      foldersFromFilesStructure: true
+
+  # Dashboards de Docker
+  - name: 'docker'
+    orgId: 1
+    folder: 'Docker'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/docker
+      foldersFromFilesStructure: true
+
+  # Dashboards de Segurança
+  - name: 'security'
+    orgId: 1
+    folder: 'Security'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/security
+      foldersFromFilesStructure: true
+
+  # Dashboards de Business Intelligence
+  - name: 'business'
+    orgId: 1
+    folder: 'Business'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/business
+      foldersFromFilesStructure: true
+
+  # Dashboards de Logs e APM
+  - name: 'observability'
+    orgId: 1
+    folder: 'Observability'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/observability
+      foldersFromFilesStructure: true
+
+  # Dashboards de SRE e SLI/SLO
+  - name: 'sre'
+    orgId: 1
+    folder: 'SRE'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/sre
+      foldersFromFilesStructure: true
+
+  # Dashboards de Desenvolvimento
+  - name: 'development'
+    orgId: 1
+    folder: 'Development'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/development
+      foldersFromFilesStructure: true
+
+  # Dashboards de Cloud Providers
+  - name: 'cloud'
+    orgId: 1
+    folder: 'Cloud'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/cloud
+      foldersFromFilesStructure: true
+
+  # Dashboards Customizados por Equipe
+  - name: 'custom'
+    orgId: 1
+    folder: 'Custom'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/custom
+      foldersFromFilesStructure: true
+
+# ============================================================================
+# ESTRUTURA DE DIRETÓRIOS RECOMENDADA
+# ============================================================================
+#
+# /etc/grafana/provisioning/dashboards/
+# ├── infrastructure/
+# │   ├── node-exporter/
+# │   │   ├── node-exporter-full.json
+# │   │   ├── node-exporter-summary.json
+# │   │   └── disk-usage.json
+# │   ├── system/
+# │   │   ├── system-overview.json
+# │   │   ├── cpu-memory.json
+# │   │   └── network-io.json
+# │   └── prometheus/
+# │       ├── prometheus-stats.json
+# │       ├── targets-overview.json
+# │       └── rule-evaluation.json
+# │
+# ├── applications/
+# │   ├── web-services/
+# │   │   ├── nginx.json
+# │   │   ├── apache.json
+# │   │   └── haproxy.json
+# │   ├── apis/
+# │   │   ├── rest-api-metrics.json
+# │   │   ├── graphql-metrics.json
+# │   │   └── microservices.json
+# │   └── messaging/
+# │       ├── rabbitmq.json
+# │       ├── kafka.json
+# │       └── redis.json
+# │
+# ├── network/
+# │   ├── snmp/
+# │   │   ├── switches.json
+# │   │   ├── routers.json
+# │   │   └── interfaces.json
+# │   ├── connectivity/
+# │   │   ├── blackbox-exporter.json
+# │   │   ├── ping-monitoring.json
+# │   │   └── dns-monitoring.json
+# │   └── security/
+# │       ├── firewall-logs.json
+# │       ├── intrusion-detection.json
+# │       └── network-anomalies.json
+# │
+# ├── database/
+# │   ├── mysql/
+# │   │   ├── mysql-overview.json
+# │   │   ├── mysql-performance.json
+# │   │   └── mysql-replication.json
+# │   ├── postgresql/
+# │   │   ├── postgres-overview.json
+# │   │   ├── postgres-queries.json
+# │   │   └── postgres-connections.json
+# │   ├── mongodb/
+# │   │   ├── mongodb-overview.json
+# │   │   ├── mongodb-operations.json
+# │   │   └── mongodb-sharding.json
+# │   └── redis/
+# │       ├── redis-overview.json
+# │       ├── redis-memory.json
+# │       └── redis-commands.json
+# │
+# ├── kubernetes/
+# │   ├── cluster/
+# │   │   ├── cluster-overview.json
+# │   │   ├── nodes.json
+# │   │   └── resource-usage.json
+# │   ├── workloads/
+# │   │   ├── deployments.json
+# │   │   ├── pods.json
+# │   │   └── services.json
+# │   └── monitoring/
+# │       ├── kube-state-metrics.json
+# │       ├── kubelet.json
+# │       └── etcd.json
+# │
+# ├── docker/
+# │   ├── containers/
+# │   │   ├── container-overview.json
+# │   │   ├── container-resources.json
+# │   │   └── container-logs.json
+# │   ├── images/
+# │   │   ├── image-usage.json
+# │   │   ├── image-security.json
+# │   │   └── registry-stats.json
+# │   └── compose/
+# │       ├── docker-compose-stack.json
+# │       ├── service-health.json
+# │       └── volume-usage.json
+# │
+# ├── observability/
+# │   ├── logs/
+# │   │   ├── loki-overview.json
+# │   │   ├── log-analysis.json
+# │   │   └── error-tracking.json
+# │   ├── traces/
+# │   │   ├── jaeger-overview.json
+# │   │   ├── service-map.json
+# │   │   └── trace-analysis.json
+# │   └── apm/
+# │       ├── application-performance.json
+# │       ├── error-rates.json
+# │       └── user-experience.json
+# │
+# ├── sre/
+# │   ├── sli-slo/
+# │   │   ├── service-level-indicators.json
+# │   │   ├── error-budgets.json
+# │   │   └── availability.json
+# │   ├── incidents/
+# │   │   ├── incident-response.json
+# │   │   ├── mttr-analysis.json
+# │   │   └── postmortem-metrics.json
+# │   └── capacity/
+# │       ├── capacity-planning.json
+# │       ├── growth-trends.json
+# │       └── resource-forecasting.json
+# │
+# └── business/
+#     ├── kpis/
+#     │   ├── business-metrics.json
+#     │   ├── revenue-tracking.json
+#     │   └── user-engagement.json
+#     ├── operations/
+#     │   ├── operational-metrics.json
+#     │   ├── cost-analysis.json
+#     │   └── efficiency-metrics.json
+#     └── executive/
+#         ├── executive-summary.json
+#         ├── health-overview.json
+#         └── trend-analysis.json
+#
+# ============================================================================
+# CONFIGURAÇÕES AVANÇADAS
+# ============================================================================
+#
+# 1. FOLDER ORGANIZATION:
+#    - Use folders para organizar dashboards por categoria
+#    - Implemente hierarquia lógica
+#    - Configure permissões por folder
+#    - Use naming conventions consistentes
+#
+# 2. UPDATE STRATEGIES:
+#    - updateIntervalSeconds: Frequência de verificação
+#    - disableDeletion: Protege dashboards de remoção
+#    - allowUiUpdates: Permite edição via interface
+#    - foldersFromFilesStructure: Cria folders automaticamente
+#
+# 3. VERSION CONTROL:
+#    - Mantenha dashboards em Git
+#    - Use CI/CD para deployment
+#    - Implemente review process
+#    - Configure backup automático
+#
+# 4. DASHBOARD STANDARDS:
+#    - Use templates consistentes
+#    - Padronize variáveis e queries
+#    - Implemente naming conventions
+#    - Configure refresh rates apropriados
+#
+# 5. PERFORMANCE:
+#    - Otimize queries para performance
+#    - Use cache quando apropriado
+#    - Configure timeouts adequados
+#    - Monitore uso de recursos
+#
+# 6. SECURITY:
+#    - Configure RBAC por folder
+#    - Use service accounts
+#    - Implemente audit logging
+#    - Proteja dashboards sensíveis
+#
+# 7. MAINTENANCE:
+#    - Monitore dashboards órfãos
+#    - Implemente cleanup automático
+#    - Configure alertas para dashboards quebrados
+#    - Mantenha documentação atualizada
+#
+# 8. COLLABORATION:
+#    - Configure teams e permissions
+#    - Use annotations para mudanças
+#    - Implemente approval workflows
+#    - Configure notifications de mudanças
+# ============================================================================

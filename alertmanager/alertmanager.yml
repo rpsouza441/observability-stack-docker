@@ -1,0 +1,133 @@
+# Configuração do Alertmanager
+# Define como os alertas são roteados e enviados
+
+global:
+  # Configurações globais
+  smtp_smarthost: '${SMTP_SMARTHOST}'
+  smtp_from: '${SMTP_FROM}'
+  smtp_auth_username: '${SMTP_AUTH_USERNAME}'
+  smtp_auth_password: '${SMTP_AUTH_PASSWORD}'
+  
+  # Configurações para Slack (opcional)
+  slack_api_url: '${SLACK_API_URL}'
+
+# Templates personalizados (opcional)
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Configuração de roteamento de alertas
+route:
+  # Configurações padrão
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: ${ALERT_GROUP_WAIT:-10s}
+  group_interval: ${ALERT_GROUP_INTERVAL:-10s}
+  repeat_interval: ${ALERT_REPEAT_INTERVAL:-1h}
+  receiver: 'default-receiver'
+  
+  # Rotas específicas
+  routes:
+    # Alertas críticos - notificação imediata
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+    
+    # Alertas de infraestrutura de rede
+    - match_re:
+        job: '^(snmp-.*|node-exporter|cadvisor)$'
+      receiver: 'infrastructure-alerts'
+      group_interval: 5m
+      repeat_interval: 30m
+    
+    # Alertas de aplicação
+    - match:
+        job: 'prometheus'
+      receiver: 'monitoring-alerts'
+      repeat_interval: 2h
+
+# Configuração dos receptores de alerta
+receivers:
+  # Receptor padrão
+  - name: 'default-receiver'
+    email_configs:
+      - to: '${ALERT_EMAIL_ADMIN}'
+        subject: '[ALERT] {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Labels: {{ range .Labels.SortedPairs }}{{ .Name }}={{ .Value }} {{ end }}
+          {{ end }}
+  
+  # Alertas críticos - múltiplos canais
+  - name: 'critical-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_ADMIN},${ALERT_EMAIL_OPS}'
+        subject: '[CRITICAL] {{ .GroupLabels.alertname }}'
+        body: |
+          ALERTA CRÍTICO!
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+    # Slack para alertas críticos (descomente e configure)
+    # slack_configs:
+    #   - api_url: '${SLACK_API_URL}'
+    #     channel: '${SLACK_CHANNEL_CRITICAL}'
+    #     title: 'CRITICAL Alert: {{ .GroupLabels.alertname }}'
+    #     text: |
+    #       {{ range .Alerts }}
+    #       *Alert:* {{ .Annotations.summary }}
+    #       *Description:* {{ .Annotations.description }}
+    #       *Instance:* {{ .Labels.instance }}
+    #       {{ end }}
+  
+  # Alertas de infraestrutura
+  - name: 'infrastructure-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_INFRA}'
+        subject: '[INFRA] {{ .GroupLabels.alertname }}'
+        body: |
+          Alerta de Infraestrutura
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Job: {{ .Labels.job }}
+          Instance: {{ .Labels.instance }}
+          {{ end }}
+  
+  # Alertas do sistema de monitoramento
+  - name: 'monitoring-alerts'
+    email_configs:
+      - to: '${ALERT_EMAIL_MONITORING}'
+        subject: '[MONITORING] {{ .GroupLabels.alertname }}'
+        body: |
+          Alerta do Sistema de Monitoramento
+          
+          {{ range .Alerts }}
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          {{ end }}
+
+# Configuração de inibição (evita spam de alertas relacionados)
+inhibit_rules:
+  # Se um nó está down, não alertar sobre serviços nesse nó
+  - source_match:
+      severity: 'critical'
+      alertname: 'InstanceDown'
+    target_match:
+      severity: 'warning'
+    equal: ['instance']
+  
+  # Se há alerta crítico, inibir warnings do mesmo serviço
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']

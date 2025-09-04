@@ -1,0 +1,455 @@
+# ============================================================================
+# REGRAS DE ALERTA GERAIS - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Este arquivo contém regras de alerting para monitoramento geral de infraestrutura
+# Foco em alertas acionáveis com redução de ruído e separação por severidade
+#
+# Estrutura:
+# - general.critical: Alertas P1 (críticos, requerem ação imediata)
+# - general.warning: Alertas P2 (importantes, requerem atenção)
+# - general.info: Alertas P3 (informativos, para awareness)
+# - monitoring.meta: Monitoramento da própria stack
+# ============================================================================
+
+groups:
+  # ========================================
+  # ALERTAS CRÍTICOS (P1)
+  # ========================================
+  - name: general.critical
+    interval: 30s
+    rules:
+      # Instância completamente down
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+          priority: P1
+          team: infrastructure
+          category: availability
+        annotations:
+          summary: "🔴 Instância {{ $labels.instance }} está DOWN"
+          description: |
+            A instância {{ $labels.instance }} do job {{ $labels.job }} está inacessível há mais de 1 minuto.
+            
+            **Detalhes:**
+            - Job: {{ $labels.job }}
+            - Instância: {{ $labels.instance }}
+            - Duração: > 1 minuto
+            
+            **Ações imediatas:**
+            1. Verificar conectividade de rede
+            2. Verificar status do serviço
+            3. Verificar logs do sistema
+          runbook_url: "https://runbooks.company.com/instance-down"
+          dashboard_url: "https://grafana.company.com/d/node-overview"
+          alert_id: "INFRA-001"
+
+      # Espaço em disco criticamente baixo
+      - alert: DiskSpaceCritical
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|devtmpfs"} / 
+            node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|devtmpfs"}
+          ) * 100 < 5
+        for: 2m
+        labels:
+          severity: critical
+          priority: P1
+          team: infrastructure
+          category: storage
+        annotations:
+          summary: "🔴 Espaço em disco CRÍTICO em {{ $labels.instance }}"
+          description: |
+            Filesystem {{ $labels.mountpoint }} tem apenas {{ printf "%.1f" $value }}% de espaço livre.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.device }}
+            - Ponto de montagem: {{ $labels.mountpoint }}
+            - Tipo: {{ $labels.fstype }}
+            - Espaço livre: {{ printf "%.1f" $value }}%
+            
+            **Ações imediatas:**
+            1. Limpar arquivos temporários
+            2. Rotacionar logs antigos
+            3. Verificar arquivos grandes desnecessários
+            4. Considerar expansão do volume
+          runbook_url: "https://runbooks.company.com/disk-space-critical"
+          alert_id: "INFRA-002"
+
+      # Memória criticamente alta
+      - alert: MemoryUsageCritical
+        expr: |
+          (
+            1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+          ) * 100 > 95
+        for: 5m
+        labels:
+          severity: critical
+          priority: P1
+          team: infrastructure
+          category: memory
+        annotations:
+          summary: "🔴 Uso CRÍTICO de memória em {{ $labels.instance }}"
+          description: |
+            Uso de memória está em {{ printf "%.1f" $value }}% há mais de 5 minutos.
+            
+            **Detalhes:**
+            - Uso atual: {{ printf "%.1f" $value }}%
+            - Threshold crítico: 95%
+            - Duração: > 5 minutos
+            
+            **Ações imediatas:**
+            1. Identificar processos com alto uso de memória
+            2. Considerar restart de serviços não críticos
+            3. Verificar memory leaks
+            4. Avaliar necessidade de mais RAM
+          runbook_url: "https://runbooks.company.com/memory-critical"
+          alert_id: "INFRA-003"
+
+      # Sistema de arquivos somente leitura
+      - alert: FilesystemReadOnly
+        expr: node_filesystem_readonly{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|devtmpfs"} == 1
+        for: 1m
+        labels:
+          severity: critical
+          priority: P1
+          team: infrastructure
+          category: storage
+        annotations:
+          summary: "🔴 Filesystem {{ $labels.mountpoint }} em modo SOMENTE LEITURA"
+          description: |
+            O filesystem {{ $labels.mountpoint }} está em modo somente leitura.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.device }}
+            - Ponto de montagem: {{ $labels.mountpoint }}
+            - Tipo: {{ $labels.fstype }}
+            
+            **Ações imediatas:**
+            1. Verificar integridade do filesystem
+            2. Executar fsck se necessário
+            3. Verificar hardware de storage
+            4. Remontar filesystem se possível
+          runbook_url: "https://runbooks.company.com/filesystem-readonly"
+          alert_id: "INFRA-004"
+
+  # ========================================
+  # ALERTAS DE WARNING (P2)
+  # ========================================
+  - name: general.warning
+    interval: 60s
+    rules:
+      # CPU alto sustentado
+      - alert: HighCPUUsage
+        expr: |
+          (
+            100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)
+          ) > 80
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: infrastructure
+          category: cpu
+        annotations:
+          summary: "⚠️ Alto uso de CPU em {{ $labels.instance }}"
+          description: |
+            CPU usage está em {{ printf "%.1f" $value }}% há mais de 10 minutos.
+            
+            **Detalhes:**
+            - Uso atual: {{ printf "%.1f" $value }}%
+            - Threshold: 80%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Identificar processos com alto uso de CPU
+            2. Verificar se é comportamento esperado
+            3. Considerar otimizações ou scaling
+          runbook_url: "https://runbooks.company.com/high-cpu"
+          alert_id: "INFRA-005"
+
+      # Espaço em disco baixo (warning)
+      - alert: DiskSpaceWarning
+        expr: |
+          (
+            node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|devtmpfs"} / 
+            node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs|proc|sysfs|devtmpfs"}
+          ) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          team: infrastructure
+          category: storage
+        annotations:
+          summary: "⚠️ Espaço em disco baixo em {{ $labels.instance }}"
+          description: |
+            Filesystem {{ $labels.mountpoint }} tem {{ printf "%.1f" $value }}% de espaço livre.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.device }}
+            - Espaço livre: {{ printf "%.1f" $value }}%
+            - Threshold: 15%
+            
+            **Ações recomendadas:**
+            1. Planejar limpeza de arquivos
+            2. Verificar crescimento de logs
+            3. Considerar expansão futura
+          runbook_url: "https://runbooks.company.com/disk-space-warning"
+          alert_id: "INFRA-006"
+
+      # Memória alta (warning)
+      - alert: HighMemoryUsage
+        expr: |
+          (
+            1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+          ) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: infrastructure
+          category: memory
+        annotations:
+          summary: "⚠️ Alto uso de memória em {{ $labels.instance }}"
+          description: |
+            Uso de memória está em {{ printf "%.1f" $value }}% há mais de 10 minutos.
+            
+            **Detalhes:**
+            - Uso atual: {{ printf "%.1f" $value }}%
+            - Threshold: 85%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Monitorar tendência de crescimento
+            2. Identificar processos com alto uso
+            3. Considerar otimizações
+          runbook_url: "https://runbooks.company.com/high-memory"
+          alert_id: "INFRA-007"
+
+      # Load average alto
+      - alert: HighLoadAverage
+        expr: node_load15 / on(instance) count by(instance) (node_cpu_seconds_total{mode="idle"}) > 2.0
+        for: 15m
+        labels:
+          severity: warning
+          priority: P2
+          team: infrastructure
+          category: performance
+        annotations:
+          summary: "⚠️ Load average alto em {{ $labels.instance }}"
+          description: |
+            Load average (15min) está em {{ printf "%.2f" $value }} por CPU core.
+            
+            **Detalhes:**
+            - Load per core: {{ printf "%.2f" $value }}
+            - Threshold: 2.0 por core
+            - Duração: > 15 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar processos em execução
+            2. Analisar I/O wait
+            3. Considerar balanceamento de carga
+          runbook_url: "https://runbooks.company.com/high-load"
+          alert_id: "INFRA-008"
+
+      # I/O de disco alto
+      - alert: DiskIOHigh
+        expr: |
+          (
+            rate(node_disk_io_time_seconds_total[5m]) * 100
+          ) > 80
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: infrastructure
+          category: storage
+        annotations:
+          summary: "⚠️ Alto I/O de disco em {{ $labels.instance }}"
+          description: |
+            Utilização de I/O do disco {{ $labels.device }} está em {{ printf "%.1f" $value }}%.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.device }}
+            - Utilização I/O: {{ printf "%.1f" $value }}%
+            - Threshold: 80%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Identificar processos com alto I/O
+            2. Verificar performance do storage
+            3. Considerar otimizações de I/O
+          runbook_url: "https://runbooks.company.com/high-disk-io"
+          alert_id: "INFRA-009"
+
+      # Erros de rede altos
+      - alert: NetworkErrorsHigh
+        expr: |
+          (
+            rate(node_network_receive_errs_total[5m]) + 
+            rate(node_network_transmit_errs_total[5m])
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: network
+        annotations:
+          summary: "⚠️ Erros de rede altos em {{ $labels.instance }}"
+          description: |
+            Interface {{ $labels.device }} tem {{ printf "%.1f" $value }} erros por segundo.
+            
+            **Detalhes:**
+            - Interface: {{ $labels.device }}
+            - Erros/s: {{ printf "%.1f" $value }}
+            - Threshold: 10 erros/s
+            - Duração: > 5 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar cabos e conectores
+            2. Analisar logs de rede
+            3. Verificar configuração da interface
+          runbook_url: "https://runbooks.company.com/network-errors"
+          alert_id: "NET-001"
+
+  # ========================================
+  # ALERTAS INFORMATIVOS (P3)
+  # ========================================
+  - name: general.info
+    interval: 300s  # 5 minutos
+    rules:
+      # Reinicialização do sistema
+      - alert: SystemReboot
+        expr: node_boot_time_seconds != on(instance) node_boot_time_seconds offset 1h
+        for: 1m
+        labels:
+          severity: info
+          priority: P3
+          team: infrastructure
+          category: maintenance
+        annotations:
+          summary: "ℹ️ Sistema {{ $labels.instance }} foi reinicializado"
+          description: |
+            O sistema {{ $labels.instance }} foi reinicializado recentemente.
+            
+            **Informações:**
+            - Instância: {{ $labels.instance }}
+            - Detecção: Mudança no boot time
+            
+            **Verificações recomendadas:**
+            1. Confirmar se foi manutenção planejada
+            2. Verificar se todos os serviços subiram
+            3. Validar funcionamento das aplicações
+          alert_id: "INFRA-010"
+
+  # ========================================
+  # MONITORAMENTO DA STACK (META)
+  # ========================================
+  - name: monitoring.meta
+    interval: 60s
+    rules:
+      # Prometheus down
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          priority: P1
+          team: sre
+          category: monitoring
+        annotations:
+          summary: "🔴 Prometheus está DOWN"
+          description: |
+            O servidor Prometheus não está respondendo há mais de 1 minuto.
+            
+            **Impacto:**
+            - Perda de coleta de métricas
+            - Alertas podem não funcionar
+            - Dashboards indisponíveis
+            
+            **Ações imediatas:**
+            1. Verificar status do container/serviço
+            2. Verificar logs do Prometheus
+            3. Verificar recursos do sistema
+          runbook_url: "https://runbooks.company.com/prometheus-down"
+          alert_id: "MON-001"
+
+      # Alertmanager down
+      - alert: AlertmanagerDown
+        expr: up{job="alertmanager"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          priority: P1
+          team: sre
+          category: monitoring
+        annotations:
+          summary: "🔴 Alertmanager está DOWN"
+          description: |
+            O Alertmanager não está respondendo há mais de 1 minuto.
+            
+            **Impacto:**
+            - Alertas não serão enviados
+            - Perda de notificações críticas
+            
+            **Ações imediatas:**
+            1. Verificar status do container/serviço
+            2. Verificar logs do Alertmanager
+            3. Verificar configuração
+          runbook_url: "https://runbooks.company.com/alertmanager-down"
+          alert_id: "MON-002"
+
+      # Falha no reload da configuração
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          team: sre
+          category: monitoring
+        annotations:
+          summary: "⚠️ Falha no reload da configuração do Prometheus"
+          description: |
+            O último reload da configuração do Prometheus falhou.
+            
+            **Detalhes:**
+            - Status: Falha no reload
+            - Duração: > 5 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar sintaxe da configuração
+            2. Validar arquivos de regras
+            3. Verificar logs de erro
+          runbook_url: "https://runbooks.company.com/prometheus-config-reload"
+          alert_id: "MON-003"
+
+      # Targets não coletados
+      - alert: PrometheusTargetsMissing
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          team: sre
+          category: monitoring
+        annotations:
+          summary: "⚠️ Target {{ $labels.instance }} não está sendo coletado"
+          description: |
+            O target {{ $labels.instance }} do job {{ $labels.job }} não está sendo coletado há mais de 5 minutos.
+            
+            **Possíveis causas:**
+            - Serviço down na instância
+            - Problemas de conectividade
+            - Configuração incorreta
+            - Firewall bloqueando acesso
+            
+            **Ações recomendadas:**
+            1. Verificar conectividade de rede
+            2. Validar configuração do target
+            3. Verificar status do serviço
+          runbook_url: "https://runbooks.company.com/target-missing"
+          alert_id: "MON-004"

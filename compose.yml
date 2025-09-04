@@ -1,0 +1,140 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./rules:/etc/prometheus/rules
+      - ${PROMETHEUS_DATA_PATH:-./prometheus_data}:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-30d}'
+      - '--storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-10GB}'
+      - '--web.enable-lifecycle'
+      - '--web.external-url=${PROMETHEUS_EXTERNAL_URL:-http://localhost:9090}'
+      - '--log.level=${PROMETHEUS_LOG_LEVEL:-info}'
+    environment:
+      - TZ=${TZ:-UTC}
+    networks:
+      - monitoring
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${PROMETHEUS_MEMORY_LIMIT:-2g}
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    volumes:
+      - ${GRAFANA_DATA_PATH:-./grafana_data}:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_DOMAIN=${GRAFANA_DOMAIN:-localhost}
+      - GF_ANALYTICS_REPORTING_ENABLED=${GRAFANA_ANALYTICS_REPORTING:-false}
+      - GF_ANALYTICS_CHECK_FOR_UPDATES=${GRAFANA_CHECK_FOR_UPDATES:-false}
+      - GF_USERS_DEFAULT_THEME=dark
+      - GF_LOG_LEVEL=${GRAFANA_LOG_LEVEL:-info}
+      - TZ=${TZ:-UTC}
+    networks:
+      - monitoring
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${GRAFANA_MEMORY_LIMIT:-512m}
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ${ALERTMANAGER_DATA_PATH:-./alertmanager_data}:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=${ALERTMANAGER_EXTERNAL_URL:-http://localhost:9093}'
+      - '--log.level=${ALERTMANAGER_LOG_LEVEL:-info}'
+    environment:
+      - TZ=${TZ:-UTC}
+    networks:
+      - monitoring
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${ALERTMANAGER_MEMORY_LIMIT:-256m}
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    ports:
+      - "${NODE_EXPORTER_PORT:-9100}:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    environment:
+      - TZ=${TZ:-UTC}
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    ports:
+      - "${CADVISOR_PORT:-8080}:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    environment:
+      - TZ=${TZ:-UTC}
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  snmp-exporter:
+    image: prom/snmp-exporter:latest
+    container_name: snmp-exporter
+    ports:
+      - "${SNMP_EXPORTER_PORT:-9116}:9116"
+    volumes:
+      - ./snmp_exporter/snmp.yml:/etc/snmp_exporter/snmp.yml
+    command:
+      - '--config.file=/etc/snmp_exporter/snmp.yml'
+      - '--log.level=${SNMP_EXPORTER_LOG_LEVEL:-info}'
+    environment:
+      - TZ=${TZ:-UTC}
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    name: ${DOCKER_NETWORK_NAME:-monitoring}
+    driver: bridge

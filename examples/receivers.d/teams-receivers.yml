@@ -1,0 +1,624 @@
+# ============================================================================
+# MICROSOFT TEAMS RECEIVERS - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Este arquivo contém configurações específicas para receivers do Microsoft Teams,
+# organizados por equipe, canal e tipo de alerta.
+#
+# NOTA: O Alertmanager não suporta includes nativamente para receivers.
+# Este arquivo serve como referência para implementação via:
+# - Ferramentas de templating (Helm, Ansible, Jinja2)
+# - Scripts de deployment que concatenam arquivos
+# - Ferramentas de CI/CD que processam configurações modulares
+# ============================================================================
+
+# ========================================
+# CONFIGURAÇÕES TEAMS GLOBAIS
+# ========================================
+# Variáveis de ambiente necessárias:
+# - TEAMS_SRE_WEBHOOK: Webhook do canal SRE
+# - TEAMS_DEV_WEBHOOK: Webhook do canal Development
+# - TEAMS_NETWORK_WEBHOOK: Webhook do canal Network
+# - TEAMS_DBA_WEBHOOK: Webhook do canal Database
+# - TEAMS_SECURITY_WEBHOOK: Webhook do canal Security
+# - TEAMS_GENERAL_WEBHOOK: Webhook do canal geral
+# - TEAMS_CRITICAL_WEBHOOK: Webhook do canal de alertas críticos
+#
+# Configuração de Webhooks no Teams:
+# 1. Acesse o canal desejado no Microsoft Teams
+# 2. Clique nos três pontos (...) > Connectors
+# 3. Procure por "Incoming Webhook" e configure
+# 4. Copie a URL do webhook gerada
+# 5. Configure como variável de ambiente
+
+# ========================================
+# RECEIVERS TEAMS - PADRÃO
+# ========================================
+
+# Notificações padrão
+default-notifications-teams:
+  webhook_configs:
+    - url: '${TEAMS_GENERAL_WEBHOOK}'
+      title: '🔔 Alerta de Monitoramento'
+      text: |
+        **Alerta detectado no sistema de monitoramento**
+        
+        {{ range .Alerts }}
+        **📊 Resumo:** {{ .Annotations.summary }}  
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **⚠️ Severidade:** {{ .Labels.severity | upper }}  
+        **🏷️ Prioridade:** {{ .Labels.priority | default "P2" }}  
+        **🖥️ Instância:** {{ .Labels.instance }}  
+        **🔧 Serviço:** {{ .Labels.service | default "N/A" }}  
+        **👥 Equipe:** {{ .Labels.team | default "ops" }}  
+        **🌍 Ambiente:** {{ .Labels.environment | default "unknown" }}  
+        **⏰ Iniciado:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        {{ if .Annotations.runbook_url }}
+        **📖 Runbook:** [Clique aqui]({{ .Annotations.runbook_url }})  
+        {{ end }}
+        {{ if .Annotations.alert_id }}
+        **🆔 Alert ID:** {{ .Annotations.alert_id }}  
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        **🔗 Links Úteis:**
+        - [Prometheus](http://prometheus.company.com)
+        - [Grafana](http://grafana.company.com)
+        - [Alertmanager](http://alertmanager.company.com)
+        
+        *Sistema de Monitoramento Automático*
+      send_resolved: true
+
+# ========================================
+# RECEIVERS TEAMS - CRÍTICOS
+# ========================================
+
+# Alertas críticos
+critical-alerts-teams:
+  webhook_configs:
+    - url: '${TEAMS_CRITICAL_WEBHOOK}'
+      title: '🚨 ALERTA CRÍTICO - AÇÃO IMEDIATA NECESSÁRIA'
+      text: |
+        # 🔴 ALERTA CRÍTICO DETECTADO
+        
+        ⚠️ **Um alerta crítico foi disparado e requer atenção IMEDIATA** ⚠️
+        
+        {{ range .Alerts }}
+        ## 🚨 Detalhes do Alerta
+        
+        | Campo | Valor |
+        |-------|-------|
+        | 🚨 **Alert** | {{ .Annotations.summary }} |
+        | 📝 **Descrição** | {{ .Annotations.description }} |
+        | 🔥 **Severidade** | **{{ .Labels.severity | upper }}** |
+        | ⚡ **Prioridade** | **{{ .Labels.priority | default "P1" }}** |
+        | 🖥️ **Instância** | `{{ .Labels.instance }}` |
+        | 🔧 **Serviço** | {{ .Labels.service | default "N/A" }} |
+        | 👥 **Equipe** | {{ .Labels.team | default "ops" }} |
+        | 🌍 **Ambiente** | {{ .Labels.environment | default "unknown" }} |
+        | ⏰ **Iniciado** | {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }} |
+        | ⏱️ **Duração** | {{ .StartsAt | since }} |
+        {{ if .Annotations.runbook_url }}
+        | 📖 **Runbook** | [Procedimentos]({{ .Annotations.runbook_url }}) |
+        {{ end }}
+        {{ if .Annotations.alert_id }}
+        | 🆔 **Alert ID** | {{ .Annotations.alert_id }} |
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        ## ⚡ Ações Recomendadas
+        
+        1. ✅ Verificar o status do serviço imediatamente
+        2. 📖 Consultar o runbook para procedimentos específicos
+        3. 📞 Escalar para o oncall se necessário
+        4. 📝 Documentar ações tomadas no ticket de incident
+        
+        ## 🔗 Links de Monitoramento
+        
+        - [🎯 Prometheus Alerts](http://prometheus.company.com/alerts)
+        - [📊 Grafana Dashboard](http://grafana.company.com/d/overview)
+        - [🔔 Alertmanager](http://alertmanager.company.com/#/alerts)
+        - [📈 Status Page](http://status.company.com)
+        
+        ## 📞 Contatos de Emergência
+        
+        - **SRE Oncall:** +55 11 99999-0001
+        - **Ops Manager:** +55 11 99999-0002
+        - **Emergency Escalation:** +55 11 99999-0000
+        
+        ---
+        
+        *🤖 Sistema de Monitoramento Crítico - Resposta Automática*
+      send_resolved: true
+      http_config:
+        proxy_url: ''
+      ms_teams:
+        webhook_url: '${TEAMS_CRITICAL_WEBHOOK}'
+        title: '🚨 CRITICAL ALERT'
+        text: 'Critical alert requires immediate attention'
+
+# ========================================
+# RECEIVERS TEAMS - POR EQUIPE
+# ========================================
+
+# SRE Team
+sre-notifications-teams:
+  webhook_configs:
+    - url: '${TEAMS_SRE_WEBHOOK}'
+      title: '🛠️ SRE Team - Alerta de Infraestrutura'
+      text: |
+        # 🛠️ Alerta para Equipe SRE
+        
+        {{ range .Alerts }}
+        ## 📊 Informações do Alerta
+        
+        **🚨 Alert:** {{ .Annotations.summary }}  
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **⚠️ Severidade:** {{ .Labels.severity | upper }}  
+        **🖥️ Instância:** `{{ .Labels.instance }}`  
+        **🔧 Serviço:** {{ .Labels.service | default "infrastructure" }}  
+        **🌍 Ambiente:** {{ .Labels.environment | default "unknown" }}  
+        **🏷️ Categoria:** {{ .Labels.category | default "general" }}  
+        **⏰ Iniciado:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        {{ if .Annotations.runbook_url }}
+        **📖 Runbook:** [Procedimentos SRE]({{ .Annotations.runbook_url }})  
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        ## 📈 Métricas e Dashboards
+        
+        - [🖥️ Node Exporter](http://grafana.company.com/d/node-exporter)
+        - [🏗️ Infrastructure Overview](http://grafana.company.com/d/infrastructure)
+        - [🎯 Prometheus Targets](http://prometheus.company.com/targets)
+        - [📊 System Metrics](http://grafana.company.com/d/system)
+        
+        ## 🔧 Procedimentos SRE
+        
+        1. ✅ Verificar métricas relacionadas
+        2. 📋 Analisar logs de sistema
+        3. 📊 Verificar capacidade e performance
+        4. 📝 Documentar investigação no runbook
+        5. 🔄 Implementar correções se necessário
+        
+        *🛠️ Equipe SRE - Sistema de Monitoramento*
+      send_resolved: true
+
+# Development Team
+dev-notifications-teams:
+  webhook_configs:
+    - url: '${TEAMS_DEV_WEBHOOK}'
+      title: '💻 Development Team - Alerta de Aplicação'
+      text: |
+        # 💻 Alerta de Desenvolvimento
+        
+        {{ range .Alerts }}
+        ## 🚀 Detalhes da Aplicação
+        
+        **🚨 Alert:** {{ .Annotations.summary }}  
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **⚠️ Severidade:** {{ .Labels.severity | upper }}  
+        **🔧 Serviço:** {{ .Labels.service }}  
+        **🖥️ Instância:** `{{ .Labels.instance }}`  
+        **🌍 Ambiente:** {{ .Labels.environment | default "development" }}  
+        **🏷️ Versão:** {{ .Labels.version | default "unknown" }}  
+        **🌿 Branch:** {{ .Labels.branch | default "main" }}  
+        **⏰ Iniciado:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        {{ if .Annotations.runbook_url }}
+        **📖 Runbook:** [Guia de Debug]({{ .Annotations.runbook_url }})  
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        ## 🔗 Links de Desenvolvimento
+        
+        - [📋 Application Logs](http://logs.company.com/{{ .GroupLabels.service }})
+        - [📊 APM Dashboard](http://apm.company.com/{{ .GroupLabels.service }})
+        - [🚀 CI/CD Pipeline](http://ci.company.com/{{ .GroupLabels.service }})
+        - [📁 Repository](http://git.company.com/{{ .GroupLabels.service }})
+        - [🧪 Test Results](http://tests.company.com/{{ .GroupLabels.service }})
+        
+        ## 🐛 Procedimentos de Debug
+        
+        1. ✅ Verificar logs da aplicação
+        2. 📊 Analisar métricas de performance
+        3. 🚀 Verificar última deployment
+        4. 🧪 Testar funcionalidade afetada
+        5. ↩️ Rollback se necessário
+        6. 📝 Documentar issue no Jira/GitHub
+        
+        *💻 Equipe de Desenvolvimento - Sistema de Monitoramento*
+      send_resolved: true
+
+# Network Team
+network-notifications-teams:
+  webhook_configs:
+    - url: '${TEAMS_NETWORK_WEBHOOK}'
+      title: '🌐 Network Team - Alerta de Rede'
+      text: |
+        # 🌐 Alerta de Infraestrutura de Rede
+        
+        {{ range .Alerts }}
+        ## 🔌 Informações do Dispositivo
+        
+        **🚨 Alert:** {{ .Annotations.summary }}  
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **⚠️ Severidade:** {{ .Labels.severity | upper }}  
+        **🖥️ Dispositivo:** `{{ .Labels.instance }}`  
+        **🏷️ Tipo:** {{ .Labels.device_type | default "network-device" }}  
+        **📍 Localização:** {{ .Labels.location | default "unknown" }}  
+        **🏢 Vendor:** {{ .Labels.vendor | default "unknown" }}  
+        **📱 Modelo:** {{ .Labels.model | default "unknown" }}  
+        **🔌 Interface:** {{ .Labels.ifDescr | default "N/A" }}  
+        **⏰ Iniciado:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        {{ if .Annotations.runbook_url }}
+        **📖 Runbook:** [Procedimentos de Rede]({{ .Annotations.runbook_url }})  
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        ## 🛠️ Ferramentas de Rede
+        
+        - [🌐 Network Monitoring](http://grafana.company.com/d/network-overview)
+        - [📊 SNMP Dashboard](http://grafana.company.com/d/snmp-devices)
+        - [🗺️ Network Topology](http://netbox.company.com)
+        - [⚙️ Device Management](http://nms.company.com)
+        - [📈 Bandwidth Usage](http://grafana.company.com/d/bandwidth)
+        
+        ## 🔧 Procedimentos de Rede
+        
+        1. ✅ Verificar conectividade: `ping {{ .GroupLabels.instance }}`
+        2. 📊 Verificar SNMP: `snmpwalk -v2c -c public {{ .GroupLabels.instance }}`
+        3. 📈 Analisar interfaces e utilização
+        4. 📋 Verificar logs do dispositivo
+        5. 🔄 Verificar redundância e failover
+        6. 📞 Contatar fornecedor se necessário
+        
+        *🌐 Equipe de Rede - Sistema de Monitoramento*
+      send_resolved: true
+
+# Database Team
+database-notifications-teams:
+  webhook_configs:
+    - url: '${TEAMS_DBA_WEBHOOK}'
+      title: '🗄️ Database Team - Alerta de Banco de Dados'
+      text: |
+        # 🗄️ Alerta de Banco de Dados
+        
+        {{ range .Alerts }}
+        ## 💾 Informações do Database
+        
+        **🚨 Alert:** {{ .Annotations.summary }}  
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **⚠️ Severidade:** {{ .Labels.severity | upper }}  
+        **🗄️ Database:** {{ .Labels.service }}  
+        **🖥️ Instância:** `{{ .Labels.instance }}`  
+        **🏷️ Tipo:** {{ .Labels.db_type | default "unknown" }}  
+        **📱 Versão:** {{ .Labels.db_version | default "unknown" }}  
+        **📊 Schema:** {{ .Labels.database | default "N/A" }}  
+        **🌍 Ambiente:** {{ .Labels.environment | default "unknown" }}  
+        **⏰ Iniciado:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        {{ if .Annotations.runbook_url }}
+        **📖 Runbook:** [Procedimentos DBA]({{ .Annotations.runbook_url }})  
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        ## 🛠️ Ferramentas de Database
+        
+        - [🗄️ Database Dashboard](http://grafana.company.com/d/database-overview)
+        - [⚡ Performance Metrics](http://grafana.company.com/d/db-performance)
+        - [🐌 Query Analytics](http://grafana.company.com/d/slow-queries)
+        - [💾 Backup Status](http://backup.company.com/status)
+        - [🔄 Replication Monitor](http://grafana.company.com/d/db-replication)
+        
+        ## 🔧 Procedimentos DBA
+        
+        1. ✅ Verificar conexões ativas
+        2. 🐌 Analisar queries lentas
+        3. 💽 Verificar espaço em disco
+        4. 📋 Analisar logs de erro
+        5. 🔄 Verificar replicação (se aplicável)
+        6. 💾 Verificar status de backup
+        7. 📊 Analisar performance metrics
+        
+        *🗄️ Equipe DBA - Sistema de Monitoramento*
+      send_resolved: true
+
+# Security Team
+security-notifications-teams:
+  webhook_configs:
+    - url: '${TEAMS_SECURITY_WEBHOOK}'
+      title: '🔒 Security Team - Alerta de Segurança'
+      text: |
+        # 🔒 ALERTA DE SEGURANÇA
+        
+        ⚠️ **Um evento de segurança foi detectado e requer análise** ⚠️
+        
+        {{ range .Alerts }}
+        ## 🛡️ Detalhes do Evento de Segurança
+        
+        | Campo | Valor |
+        |-------|-------|
+        | 🔒 **Alert** | {{ .Annotations.summary }} |
+        | 📝 **Descrição** | {{ .Annotations.description }} |
+        | 🚨 **Severidade** | **{{ .Labels.severity | upper }}** |
+        | 🖥️ **Instância** | `{{ .Labels.instance }}` |
+        | 🔧 **Serviço** | {{ .Labels.service | default "N/A" }} |
+        | 🌍 **Ambiente** | {{ .Labels.environment | default "unknown" }} |
+        | 📍 **Localização** | {{ .Labels.location | default "unknown" }} |
+        | 🕐 **Iniciado** | {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }} |
+        {{ if .Labels.source_ip }}
+        | 🌐 **IP de Origem** | `{{ .Labels.source_ip }}` |
+        {{ end }}
+        {{ if .Labels.user }}
+        | 👤 **Usuário** | {{ .Labels.user }} |
+        {{ end }}
+        {{ if .Annotations.runbook_url }}
+        | 📖 **Runbook** | [Procedimentos]({{ .Annotations.runbook_url }}) |
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        ## 🛠️ Ferramentas de Segurança
+        
+        - [🔍 SIEM Dashboard](http://siem.company.com)
+        - [📊 Security Metrics](http://grafana.company.com/d/security)
+        - [🎯 Threat Intelligence](http://threat.company.com)
+        - [📝 Incident Response](http://incident.company.com)
+        - [🔒 Vulnerability Scanner](http://vuln.company.com)
+        
+        ## 🔧 Procedimentos de Segurança
+        
+        1. ✅ Analisar logs de segurança
+        2. 🔍 Verificar indicadores de comprometimento
+        3. 🎯 Correlacionar com threat intelligence
+        4. 📝 Documentar no sistema de incidents
+        5. 📞 Escalar conforme política de segurança
+        6. 🔒 Implementar medidas de contenção se necessário
+        
+        ---
+        
+        ⚠️ **CONFIDENCIAL - EQUIPE DE SEGURANÇA** ⚠️  
+        *Este alerta contém informações sensíveis de segurança*
+      send_resolved: true
+
+# ========================================
+# RECEIVERS TEAMS - POR AMBIENTE
+# ========================================
+
+# Produção
+production-alerts-teams:
+  webhook_configs:
+    - url: '${TEAMS_GENERAL_WEBHOOK}'
+      title: '🏭 PRODUÇÃO - Alerta Crítico do Negócio'
+      text: |
+        # 🏭 ALERTA DE PRODUÇÃO
+        
+        ⚠️ **Um alerta foi disparado no ambiente de produção** ⚠️
+        
+        {{ range .Alerts }}
+        ## 🚨 Detalhes do Alerta de Produção
+        
+        **🚨 Alert:** {{ .Annotations.summary }}  
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **🔥 Severidade:** **{{ .Labels.severity | upper }}**  
+        **⚡ Prioridade:** **{{ .Labels.priority | default "P2" }}**  
+        **🔧 Serviço:** {{ .Labels.service }}  
+        **🖥️ Instância:** `{{ .Labels.instance }}`  
+        **📱 Versão:** {{ .Labels.version | default "unknown" }}  
+        **🏗️ Cluster:** {{ .Labels.cluster | default "main" }}  
+        **⏰ Iniciado:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        {{ if .Annotations.runbook_url }}
+        **📖 Runbook:** [Procedimentos de Produção]({{ .Annotations.runbook_url }})  
+        {{ end }}
+        
+        ---
+        {{ end }}
+        
+        ## 💼 Impacto no Negócio
+        
+        | Aspecto | Status |
+        |---------|--------|
+        | 🌍 **Ambiente** | **PRODUÇÃO** |
+        | 🔥 **Criticidade** | **ALTA** |
+        | 📊 **SLA Impact** | Possível |
+        | 👥 **Customer Impact** | {{ if eq .GroupLabels.severity "critical" }}**ALTO**{{ else }}BAIXO{{ end }} |
+        | 💰 **Business Impact** | {{ if eq .GroupLabels.severity "critical" }}**CRÍTICO**{{ else }}Limitado{{ end }} |
+        
+        ## ⚡ Ações Imediatas
+        
+        1. ✅ **Verificar status do serviço**
+        2. 👥 **Analisar impacto nos usuários**
+        3. 📋 **Seguir procedimentos de incident response**
+        4. 📞 **Comunicar stakeholders se necessário**
+        5. 📊 **Monitorar métricas de negócio**
+        6. 📝 **Documentar todas as ações**
+        
+        ## 📞 Escalação de Emergência
+        
+        - **Incident Commander:** +55 11 99999-1001
+        - **Technical Lead:** +55 11 99999-1002
+        - **Business Owner:** +55 11 99999-1003
+        
+        ---
+        
+        🏭 **AMBIENTE DE PRODUÇÃO - ATENÇÃO REDOBRADA** 🏭
+      send_resolved: true
+
+# Staging
+staging-alerts-teams:
+  webhook_configs:
+    - url: '${TEAMS_DEV_WEBHOOK}'
+      title: '🧪 STAGING - Alerta de Ambiente de Teste'
+      text: |
+        # 🧪 ALERTA DE STAGING
+        
+        {{ range .Alerts }}
+        ## 🧪 Detalhes do Ambiente de Teste
+        
+        **🚨 Alert:** {{ .Annotations.summary }}  
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **⚠️ Severidade:** {{ .Labels.severity | upper }}  
+        **🔧 Serviço:** {{ .Labels.service }}  
+        **🖥️ Instância:** `{{ .Labels.instance }}`  
+        **🌿 Branch:** {{ .Labels.branch | default "develop" }}  
+        **🏗️ Build:** {{ .Labels.build | default "unknown" }}  
+        **⏰ Iniciado:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        
+        ---
+        {{ end }}
+        
+        ## 🧪 Informações do Ambiente
+        
+        - **🌍 Ambiente:** STAGING
+        - **🎯 Propósito:** Testes e validação
+        - **📊 Impact:** Limitado ao ambiente de teste
+        - **👥 Usuários:** Equipe interna e QA
+        
+        ## 🔧 Ações Recomendadas
+        
+        1. ✅ Verificar se afeta testes em andamento
+        2. 🧪 Validar funcionalidades críticas
+        3. 📋 Verificar logs de deployment
+        4. 🔄 Considerar redeploy se necessário
+        
+        *🧪 Ambiente de Staging - Sistema de Monitoramento*
+      send_resolved: true
+
+# ========================================
+# RECEIVERS TEAMS - ESPECIAIS
+# ========================================
+
+# Heartbeat/Watchdog
+monitoring-heartbeat-teams:
+  webhook_configs:
+    - url: '${TEAMS_GENERAL_WEBHOOK}'
+      title: '💓 Sistema de Monitoramento - Heartbeat'
+      text: |
+        # 💓 Heartbeat do Sistema de Monitoramento
+        
+        ## ✅ Status do Alertmanager
+        
+        **⏰ Timestamp:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        **✅ Status:** Funcionando normalmente  
+        **🔄 Última verificação:** Bem-sucedida  
+        
+        ## 📊 Componentes Monitorados
+        
+        - ✅ **Prometheus:** Ativo
+        - ✅ **Alertmanager:** Ativo
+        - ✅ **Grafana:** Ativo
+        - 📊 **Exporters:** Verificar dashboard
+        
+        ## 🔗 Links de Verificação
+        
+        - [🎯 Prometheus](http://prometheus.company.com)
+        - [📊 Grafana](http://grafana.company.com)
+        - [🔔 Alertmanager](http://alertmanager.company.com)
+        
+        *💓 Sistema de Monitoramento - Verificação Automática*
+      send_resolved: false
+
+# Maintenance Window
+maintenance-notifications-teams:
+  webhook_configs:
+    - url: '${TEAMS_GENERAL_WEBHOOK}'
+      title: '🔧 Janela de Manutenção - Notificação'
+      text: |
+        # 🔧 Janela de Manutenção
+        
+        {{ range .Alerts }}
+        ## 🛠️ Informações da Manutenção
+        
+        **📝 Descrição:** {{ .Annotations.description }}  
+        **🔧 Serviço:** {{ .Labels.service }}  
+        **🖥️ Instância:** `{{ .Labels.instance }}`  
+        **⏰ Início:** {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}  
+        **⏱️ Duração Estimada:** {{ .Labels.duration | default "1 hora" }}  
+        **👥 Responsável:** {{ .Labels.maintainer | default "Equipe SRE" }}  
+        
+        ---
+        {{ end }}
+        
+        ## ℹ️ Informações Importantes
+        
+        - 🔕 **Alertas podem ser suprimidos durante a manutenção**
+        - 📊 **Métricas podem apresentar anomalias temporárias**
+        - 🔄 **Serviços serão restaurados automaticamente**
+        - 📞 **Contate a equipe SRE em caso de problemas**
+        
+        *🔧 Sistema de Manutenção - Notificação Automática*
+      send_resolved: true
+
+# ============================================================================
+# CONFIGURAÇÃO DE TEMPLATES TEAMS
+# ============================================================================
+#
+# 1. FORMATAÇÃO MARKDOWN:
+#    - Use # para títulos principais
+#    - Use ## para subtítulos
+#    - Use **texto** para negrito
+#    - Use `código` para código inline
+#    - Use | Tabela | Formato | para tabelas
+#    - Use - Lista para listas
+#    - Use [Link](URL) para links
+#
+# 2. EMOJIS RECOMENDADOS:
+#    - 🚨 Alertas críticos
+#    - ⚠️ Warnings
+#    - ✅ Status OK
+#    - 🔧 Manutenção
+#    - 📊 Métricas
+#    - 🖥️ Servidores
+#    - 🌐 Rede
+#    - 🗄️ Banco de dados
+#    - 💻 Desenvolvimento
+#    - 🔒 Segurança
+#    - 📞 Contatos
+#    - 🔗 Links
+#
+# 3. CORES E TEMAS:
+#    - Teams suporta temas automáticos
+#    - Use formatação consistente
+#    - Evite cores específicas no texto
+#    - Confie na formatação markdown
+#
+# 4. WEBHOOK CONFIGURATION:
+#    - Configure webhooks por canal
+#    - Use variáveis de ambiente
+#    - Teste conectividade regularmente
+#    - Configure retry policies
+#
+# 5. CARDS E ACTIONS:
+#    - Teams suporta Adaptive Cards
+#    - Configure actions para links rápidos
+#    - Use botões para ações comuns
+#    - Implemente deep links quando possível
+#
+# 6. RATE LIMITING:
+#    - Teams tem limites de rate
+#    - Configure throttling no Alertmanager
+#    - Use group_interval adequadamente
+#    - Monitore delivery status
+#
+# 7. TESTE E VALIDAÇÃO:
+#    - Teste webhooks regularmente
+#    - Valide formatação em diferentes clientes
+#    - Configure alertas de falha de entrega
+#    - Documente troubleshooting
+#
+# 8. SEGURANÇA:
+#    - Proteja URLs de webhook
+#    - Use HTTPS sempre
+#    - Configure IP whitelisting se possível
+#    - Monitore uso não autorizado
+# ============================================================================

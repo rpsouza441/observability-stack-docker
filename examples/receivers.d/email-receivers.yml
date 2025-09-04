@@ -1,0 +1,530 @@
+# ============================================================================
+# EMAIL RECEIVERS - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Este arquivo contém configurações específicas para receivers de email,
+# organizados por equipe, severidade e tipo de alerta.
+#
+# NOTA: O Alertmanager não suporta includes nativamente para receivers.
+# Este arquivo serve como referência para implementação via:
+# - Ferramentas de templating (Helm, Ansible, Jinja2)
+# - Scripts de deployment que concatenam arquivos
+# - Ferramentas de CI/CD que processam configurações modulares
+# ============================================================================
+
+# ========================================
+# CONFIGURAÇÕES EMAIL GLOBAIS
+# ========================================
+# Variáveis de ambiente necessárias:
+# - SMTP_SMARTHOST: Servidor SMTP (ex: smtp.company.com:587)
+# - SMTP_FROM: Email remetente (ex: alertmanager@company.com)
+# - SMTP_AUTH_USERNAME: Usuário SMTP
+# - SMTP_AUTH_PASSWORD: Senha SMTP
+#
+# Listas de email por equipe:
+# - SRE_EMAIL_LIST: sre-team@company.com,sre-oncall@company.com
+# - DEV_EMAIL_LIST: dev-team@company.com,tech-leads@company.com
+# - NETWORK_EMAIL_LIST: network-team@company.com,network-oncall@company.com
+# - DBA_EMAIL_LIST: dba-team@company.com,database-admins@company.com
+# - SECURITY_EMAIL_LIST: security-team@company.com,ciso@company.com
+
+# ========================================
+# RECEIVERS EMAIL - PADRÃO
+# ========================================
+
+# Notificações padrão
+default-notifications-email:
+  email_configs:
+    - to: 'ops-team@company.com'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[ALERT] {{ .GroupLabels.alertname }} - {{ .GroupLabels.severity }}'
+      body: |
+        Alerta detectado no sistema de monitoramento.
+        
+        ===== RESUMO DO ALERTA =====
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Descrição: {{ .Annotations.description }}
+        Severidade: {{ .Labels.severity | upper }}
+        Prioridade: {{ .Labels.priority | default "P2" }}
+        Instância: {{ .Labels.instance }}
+        Serviço: {{ .Labels.service | default "N/A" }}
+        Equipe: {{ .Labels.team | default "ops" }}
+        Ambiente: {{ .Labels.environment | default "unknown" }}
+        Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        {{ if .Annotations.runbook_url }}
+        Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        {{ if .Annotations.alert_id }}
+        Alert ID: {{ .Annotations.alert_id }}
+        {{ end }}
+        
+        {{ end }}
+        ===== LINKS ÚTEIS =====
+        - Prometheus: http://prometheus.company.com
+        - Grafana: http://grafana.company.com
+        - Alertmanager: http://alertmanager.company.com
+        
+        Este é um email automático do sistema de monitoramento.
+      headers:
+        Subject: '[ALERT] {{ .GroupLabels.alertname }}'
+        X-Priority: '{{ if eq .GroupLabels.severity "critical" }}1{{ else if eq .GroupLabels.severity "warning" }}3{{ else }}5{{ end }}'
+        X-Mailer: 'Alertmanager'
+
+# ========================================
+# RECEIVERS EMAIL - CRÍTICOS
+# ========================================
+
+# Alertas críticos gerais
+critical-alerts-email:
+  email_configs:
+    - to: 'critical-alerts@company.com,sre-oncall@company.com,ops-manager@company.com'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '🔴 CRITICAL ALERT: {{ .GroupLabels.alertname }} - {{ .GroupLabels.instance }}'
+      body: |
+        ⚠️  ALERTA CRÍTICO DETECTADO ⚠️
+        
+        Um alerta crítico foi disparado e requer atenção IMEDIATA.
+        
+        ===== DETALHES DO ALERTA CRÍTICO =====
+        {{ range .Alerts }}
+        🚨 Alert: {{ .Annotations.summary }}
+        📝 Descrição: {{ .Annotations.description }}
+        🔥 Severidade: {{ .Labels.severity | upper }}
+        ⚡ Prioridade: {{ .Labels.priority | default "P1" }}
+        🖥️  Instância: {{ .Labels.instance }}
+        🔧 Serviço: {{ .Labels.service | default "N/A" }}
+        👥 Equipe Responsável: {{ .Labels.team | default "ops" }}
+        🌍 Ambiente: {{ .Labels.environment | default "unknown" }}
+        ⏰ Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        ⏱️  Duração: {{ .StartsAt | since }}
+        {{ if .Annotations.runbook_url }}
+        📖 Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        {{ if .Annotations.alert_id }}
+        🆔 Alert ID: {{ .Annotations.alert_id }}
+        {{ end }}
+        
+        {{ end }}
+        ===== AÇÕES RECOMENDADAS =====
+        1. Verificar o status do serviço imediatamente
+        2. Consultar o runbook para procedimentos específicos
+        3. Escalar para o oncall se necessário
+        4. Documentar ações tomadas no ticket de incident
+        
+        ===== LINKS DE MONITORAMENTO =====
+        - Prometheus: http://prometheus.company.com/alerts
+        - Grafana Dashboard: http://grafana.company.com/d/overview
+        - Alertmanager: http://alertmanager.company.com/#/alerts
+        - Status Page: http://status.company.com
+        
+        ===== CONTATOS DE EMERGÊNCIA =====
+        - SRE Oncall: +55 11 99999-0001
+        - Ops Manager: +55 11 99999-0002
+        - Emergency Escalation: +55 11 99999-0000
+        
+        Este é um email automático do sistema de monitoramento crítico.
+        Responda a este email para documentar ações tomadas.
+      headers:
+        Subject: '🔴 CRITICAL: {{ .GroupLabels.alertname }}'
+        X-Priority: '1'
+        X-MSMail-Priority: 'High'
+        Importance: 'high'
+        X-Mailer: 'Alertmanager Critical'
+        Reply-To: 'incident-response@company.com'
+
+# ========================================
+# RECEIVERS EMAIL - POR EQUIPE
+# ========================================
+
+# SRE Team
+sre-notifications-email:
+  email_configs:
+    - to: '${SRE_EMAIL_LIST:-sre-team@company.com}'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[SRE] {{ .GroupLabels.alertname }} - {{ .GroupLabels.severity }} - {{ .GroupLabels.environment }}'
+      body: |
+        Alerta para a equipe SRE.
+        
+        ===== ALERTA SRE =====
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Descrição: {{ .Annotations.description }}
+        Severidade: {{ .Labels.severity | upper }}
+        Instância: {{ .Labels.instance }}
+        Serviço: {{ .Labels.service | default "infrastructure" }}
+        Ambiente: {{ .Labels.environment | default "unknown" }}
+        Categoria: {{ .Labels.category | default "general" }}
+        Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        {{ if .Annotations.runbook_url }}
+        Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        
+        {{ end }}
+        ===== MÉTRICAS E DASHBOARDS =====
+        - Node Exporter: http://grafana.company.com/d/node-exporter
+        - Infrastructure Overview: http://grafana.company.com/d/infrastructure
+        - Prometheus Targets: http://prometheus.company.com/targets
+        
+        ===== PROCEDIMENTOS SRE =====
+        1. Verificar métricas relacionadas
+        2. Analisar logs de sistema
+        3. Verificar capacidade e performance
+        4. Documentar investigação no runbook
+        
+        Equipe SRE - Sistema de Monitoramento
+      headers:
+        Subject: '[SRE] {{ .GroupLabels.alertname }}'
+        X-Team: 'SRE'
+        X-Environment: '{{ .GroupLabels.environment }}'
+
+# Development Team
+dev-notifications-email:
+  email_configs:
+    - to: '${DEV_EMAIL_LIST:-dev-team@company.com}'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[DEV] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }} - {{ .GroupLabels.environment }}'
+      body: |
+        Alerta relacionado a aplicações e serviços de desenvolvimento.
+        
+        ===== ALERTA DE DESENVOLVIMENTO =====
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Descrição: {{ .Annotations.description }}
+        Severidade: {{ .Labels.severity | upper }}
+        Serviço: {{ .Labels.service }}
+        Instância: {{ .Labels.instance }}
+        Ambiente: {{ .Labels.environment | default "development" }}
+        Versão: {{ .Labels.version | default "unknown" }}
+        Branch: {{ .Labels.branch | default "main" }}
+        Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        {{ if .Annotations.runbook_url }}
+        Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        
+        {{ end }}
+        ===== LINKS DE DESENVOLVIMENTO =====
+        - Application Logs: http://logs.company.com/{{ .GroupLabels.service }}
+        - APM Dashboard: http://apm.company.com/{{ .GroupLabels.service }}
+        - CI/CD Pipeline: http://ci.company.com/{{ .GroupLabels.service }}
+        - Repository: http://git.company.com/{{ .GroupLabels.service }}
+        
+        ===== PROCEDIMENTOS DE DEBUG =====
+        1. Verificar logs da aplicação
+        2. Analisar métricas de performance
+        3. Verificar última deployment
+        4. Testar funcionalidade afetada
+        5. Rollback se necessário
+        
+        Equipe de Desenvolvimento - Sistema de Monitoramento
+      headers:
+        Subject: '[DEV] {{ .GroupLabels.service }} - {{ .GroupLabels.alertname }}'
+        X-Team: 'Development'
+        X-Service: '{{ .GroupLabels.service }}'
+
+# Network Team
+network-notifications-email:
+  email_configs:
+    - to: '${NETWORK_EMAIL_LIST:-network-team@company.com}'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[NETWORK] {{ .GroupLabels.alertname }} - {{ .GroupLabels.instance }}'
+      body: |
+        Alerta relacionado à infraestrutura de rede.
+        
+        ===== ALERTA DE REDE =====
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Descrição: {{ .Annotations.description }}
+        Severidade: {{ .Labels.severity | upper }}
+        Dispositivo: {{ .Labels.instance }}
+        Tipo: {{ .Labels.device_type | default "network-device" }}
+        Localização: {{ .Labels.location | default "unknown" }}
+        Vendor: {{ .Labels.vendor | default "unknown" }}
+        Modelo: {{ .Labels.model | default "unknown" }}
+        Interface: {{ .Labels.ifDescr | default "N/A" }}
+        Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        {{ if .Annotations.runbook_url }}
+        Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        
+        {{ end }}
+        ===== FERRAMENTAS DE REDE =====
+        - Network Monitoring: http://grafana.company.com/d/network-overview
+        - SNMP Dashboard: http://grafana.company.com/d/snmp-devices
+        - Network Topology: http://netbox.company.com
+        - Device Management: http://nms.company.com
+        
+        ===== PROCEDIMENTOS DE REDE =====
+        1. Verificar conectividade: ping {{ .GroupLabels.instance }}
+        2. Verificar SNMP: snmpwalk -v2c -c public {{ .GroupLabels.instance }}
+        3. Analisar interfaces e utilização
+        4. Verificar logs do dispositivo
+        5. Verificar redundância e failover
+        
+        Equipe de Rede - Sistema de Monitoramento
+      headers:
+        Subject: '[NETWORK] {{ .GroupLabels.instance }} - {{ .GroupLabels.alertname }}'
+        X-Team: 'Network'
+        X-Device-Type: '{{ .GroupLabels.device_type }}'
+
+# Database Team
+database-notifications-email:
+  email_configs:
+    - to: '${DBA_EMAIL_LIST:-dba-team@company.com}'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[DATABASE] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
+      body: |
+        Alerta relacionado a bancos de dados e armazenamento.
+        
+        ===== ALERTA DE BANCO DE DADOS =====
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Descrição: {{ .Annotations.description }}
+        Severidade: {{ .Labels.severity | upper }}
+        Database: {{ .Labels.service }}
+        Instância: {{ .Labels.instance }}
+        Tipo: {{ .Labels.db_type | default "unknown" }}
+        Versão: {{ .Labels.db_version | default "unknown" }}
+        Schema: {{ .Labels.database | default "N/A" }}
+        Ambiente: {{ .Labels.environment | default "unknown" }}
+        Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        {{ if .Annotations.runbook_url }}
+        Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        
+        {{ end }}
+        ===== FERRAMENTAS DE DATABASE =====
+        - Database Dashboard: http://grafana.company.com/d/database-overview
+        - Performance Metrics: http://grafana.company.com/d/db-performance
+        - Query Analytics: http://grafana.company.com/d/slow-queries
+        - Backup Status: http://backup.company.com/status
+        
+        ===== PROCEDIMENTOS DBA =====
+        1. Verificar conexões ativas
+        2. Analisar queries lentas
+        3. Verificar espaço em disco
+        4. Analisar logs de erro
+        5. Verificar replicação (se aplicável)
+        6. Verificar status de backup
+        
+        Equipe DBA - Sistema de Monitoramento
+      headers:
+        Subject: '[DBA] {{ .GroupLabels.service }} - {{ .GroupLabels.alertname }}'
+        X-Team: 'DBA'
+        X-Database-Type: '{{ .GroupLabels.db_type }}'
+
+# Security Team
+security-notifications-email:
+  email_configs:
+    - to: '${SECURITY_EMAIL_LIST:-security-team@company.com}'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[SECURITY] {{ .GroupLabels.alertname }} - {{ .GroupLabels.severity }}'
+      body: |
+        ⚠️  ALERTA DE SEGURANÇA ⚠️
+        
+        Um evento de segurança foi detectado e requer análise.
+        
+        ===== ALERTA DE SEGURANÇA =====
+        {{ range .Alerts }}
+        🔒 Alert: {{ .Annotations.summary }}
+        📝 Descrição: {{ .Annotations.description }}
+        🚨 Severidade: {{ .Labels.severity | upper }}
+        🖥️  Instância: {{ .Labels.instance }}
+        🔧 Serviço: {{ .Labels.service | default "N/A" }}
+        🌍 Ambiente: {{ .Labels.environment | default "unknown" }}
+        📍 Localização: {{ .Labels.location | default "unknown" }}
+        🕐 Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        {{ if .Labels.source_ip }}
+        🌐 IP de Origem: {{ .Labels.source_ip }}
+        {{ end }}
+        {{ if .Labels.user }}
+        👤 Usuário: {{ .Labels.user }}
+        {{ end }}
+        {{ if .Annotations.runbook_url }}
+        📖 Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        
+        {{ end }}
+        ===== FERRAMENTAS DE SEGURANÇA =====
+        - SIEM Dashboard: http://siem.company.com
+        - Security Metrics: http://grafana.company.com/d/security
+        - Threat Intelligence: http://threat.company.com
+        - Incident Response: http://incident.company.com
+        
+        ===== PROCEDIMENTOS DE SEGURANÇA =====
+        1. Analisar logs de segurança
+        2. Verificar indicadores de comprometimento
+        3. Correlacionar com threat intelligence
+        4. Documentar no sistema de incidents
+        5. Escalar conforme política de segurança
+        
+        ⚠️  CONFIDENCIAL - EQUIPE DE SEGURANÇA ⚠️
+        Este email contém informações sensíveis de segurança.
+      headers:
+        Subject: '[SECURITY] {{ .GroupLabels.alertname }}'
+        X-Priority: '1'
+        X-Team: 'Security'
+        X-Classification: 'Confidential'
+
+# ========================================
+# RECEIVERS EMAIL - POR AMBIENTE
+# ========================================
+
+# Produção
+production-alerts-email:
+  email_configs:
+    - to: 'production-alerts@company.com,ops-manager@company.com'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[PROD] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
+      body: |
+        🏭 ALERTA DE PRODUÇÃO 🏭
+        
+        Um alerta foi disparado no ambiente de produção.
+        
+        ===== DETALHES DO ALERTA =====
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Descrição: {{ .Annotations.description }}
+        Severidade: {{ .Labels.severity | upper }}
+        Prioridade: {{ .Labels.priority | default "P2" }}
+        Serviço: {{ .Labels.service }}
+        Instância: {{ .Labels.instance }}
+        Versão: {{ .Labels.version | default "unknown" }}
+        Cluster: {{ .Labels.cluster | default "main" }}
+        Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        {{ if .Annotations.runbook_url }}
+        Runbook: {{ .Annotations.runbook_url }}
+        {{ end }}
+        
+        {{ end }}
+        ===== IMPACTO NO NEGÓCIO =====
+        - Ambiente: PRODUÇÃO
+        - Criticidade: ALTA
+        - SLA Impact: Possível
+        - Customer Impact: {{ if eq .GroupLabels.severity "critical" }}ALTO{{ else }}BAIXO{{ end }}
+        
+        ===== AÇÕES IMEDIATAS =====
+        1. Verificar status do serviço
+        2. Analisar impacto nos usuários
+        3. Seguir procedimentos de incident response
+        4. Comunicar stakeholders se necessário
+        
+        🏭 AMBIENTE DE PRODUÇÃO - ATENÇÃO REDOBRADA 🏭
+      headers:
+        Subject: '[PROD] {{ .GroupLabels.service }} - {{ .GroupLabels.alertname }}'
+        X-Priority: '2'
+        X-Environment: 'Production'
+        X-Business-Impact: '{{ if eq .GroupLabels.severity "critical" }}High{{ else }}Low{{ end }}'
+
+# Staging
+staging-alerts-email:
+  email_configs:
+    - to: 'staging-alerts@company.com,qa-team@company.com'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[STAGING] {{ .GroupLabels.alertname }} - {{ .GroupLabels.service }}'
+      body: |
+        🧪 ALERTA DE STAGING 🧪
+        
+        ===== ALERTA DE STAGING =====
+        {{ range .Alerts }}
+        Alert: {{ .Annotations.summary }}
+        Descrição: {{ .Annotations.description }}
+        Severidade: {{ .Labels.severity | upper }}
+        Serviço: {{ .Labels.service }}
+        Instância: {{ .Labels.instance }}
+        Branch: {{ .Labels.branch | default "develop" }}
+        Build: {{ .Labels.build | default "unknown" }}
+        Iniciado em: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        
+        {{ end }}
+        ===== AMBIENTE DE TESTE =====
+        - Ambiente: STAGING
+        - Propósito: Testes e validação
+        - Impact: Limitado ao ambiente de teste
+        
+        Equipe QA - Sistema de Monitoramento
+      headers:
+        Subject: '[STAGING] {{ .GroupLabels.alertname }}'
+        X-Environment: 'Staging'
+        X-Priority: '3'
+
+# ========================================
+# RECEIVERS EMAIL - ESPECIAIS
+# ========================================
+
+# Heartbeat/Watchdog
+monitoring-heartbeat-email:
+  email_configs:
+    - to: 'monitoring-team@company.com'
+      from: '${SMTP_FROM:-alertmanager@company.com}'
+      subject: '[HEARTBEAT] Alertmanager Status - {{ .StartsAt.Format "2006-01-02 15:04" }}'
+      body: |
+        Sistema de Monitoramento - Heartbeat
+        
+        ===== STATUS DO ALERTMANAGER =====
+        Timestamp: {{ .StartsAt.Format "2006-01-02 15:04:05 MST" }}
+        Status: Funcionando normalmente
+        
+        ===== COMPONENTES MONITORADOS =====
+        - Prometheus: Ativo
+        - Alertmanager: Ativo
+        - Grafana: Ativo
+        - Exporters: Verificar dashboard
+        
+        Este é um email automático de verificação do sistema.
+      headers:
+        Subject: '[HEARTBEAT] Alertmanager OK'
+        X-Type: 'Heartbeat'
+        X-Priority: '5'
+
+# ============================================================================
+# CONFIGURAÇÃO DE TEMPLATES EMAIL
+# ============================================================================
+#
+# 1. VARIÁVEIS DISPONÍVEIS:
+#    - .GroupLabels: Labels agrupados
+#    - .CommonLabels: Labels comuns
+#    - .CommonAnnotations: Annotations comuns
+#    - .Alerts: Array de alertas
+#    - .Status: Status (firing/resolved)
+#    - .Receiver: Nome do receiver
+#
+# 2. FUNÇÕES DE TEMPLATE:
+#    - .StartsAt.Format "layout": Formatação de data
+#    - .StartsAt | since: Duração desde o início
+#    - .Labels.label | default "valor": Valor padrão
+#    - .Labels.label | upper: Maiúsculo
+#    - .Labels.label | lower: Minúsculo
+#
+# 3. HEADERS RECOMENDADOS:
+#    - X-Priority: 1 (high), 3 (normal), 5 (low)
+#    - X-Team: Nome da equipe
+#    - X-Environment: Ambiente
+#    - X-Service: Serviço
+#    - Reply-To: Email para respostas
+#    - X-Mailer: Identificação do sistema
+#
+# 4. FORMATAÇÃO DE EMAIL:
+#    - Use texto simples para compatibilidade
+#    - Estruture com seções claras
+#    - Inclua links úteis
+#    - Adicione procedimentos de ação
+#    - Use emojis com moderação
+#
+# 5. CONFIGURAÇÃO SMTP:
+#    - Configure TLS/SSL adequadamente
+#    - Use autenticação segura
+#    - Configure timeouts apropriados
+#    - Teste entrega regularmente
+#
+# 6. LISTAS DE EMAIL:
+#    - Use variáveis de ambiente
+#    - Mantenha listas atualizadas
+#    - Configure aliases por equipe
+#    - Documente responsabilidades
+#
+# 7. TESTE E VALIDAÇÃO:
+#    - Teste templates com dados reais
+#    - Verifique formatação em diferentes clientes
+#    - Valide entrega e recebimento
+#    - Configure filtros anti-spam
+# ============================================================================

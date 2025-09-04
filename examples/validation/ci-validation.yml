@@ -1,0 +1,511 @@
+# ============================================================================
+# CI/CD Pipeline - Observability Stack Validation
+# ============================================================================
+# Exemplo de pipeline para GitHub Actions, GitLab CI, ou Azure DevOps
+# Adapte conforme sua plataforma de CI/CD
+
+# GitHub Actions Example
+# .github/workflows/validate-observability.yml
+---
+name: Validate Observability Stack
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'examples/**'
+      - 'docker-compose*.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'examples/**'
+      - 'docker-compose*.yml'
+
+jobs:
+  validate-configs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Docker
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Install promtool
+      run: |
+        wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+        tar xzf prometheus-2.45.0.linux-amd64.tar.gz
+        sudo cp prometheus-2.45.0.linux-amd64/promtool /usr/local/bin/
+        promtool --version
+    
+    - name: Install amtool
+      run: |
+        wget https://github.com/prometheus/alertmanager/releases/download/v0.26.0/alertmanager-0.26.0.linux-amd64.tar.gz
+        tar xzf alertmanager-0.26.0.linux-amd64.tar.gz
+        sudo cp alertmanager-0.26.0.linux-amd64/amtool /usr/local/bin/
+        amtool --version
+    
+    - name: Validate Prometheus Configuration
+      run: |
+        chmod +x examples/validation/validate-prometheus.sh
+        ./examples/validation/validate-prometheus.sh
+    
+    - name: Validate Alertmanager Configuration
+      run: |
+        chmod +x examples/validation/validate-alertmanager.sh
+        ./examples/validation/validate-alertmanager.sh
+    
+    - name: Test Docker Compose Syntax
+      run: |
+        docker-compose -f docker-compose.yml config
+        docker-compose -f docker-compose.monitoring.yml config
+    
+    - name: Generate Validation Report
+      run: |
+        ./examples/validation/validate-prometheus.sh --generate-report
+        ./examples/validation/validate-alertmanager.sh --generate-report
+    
+    - name: Upload Validation Reports
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: validation-reports
+        path: |
+          prometheus-validation-*.md
+          alertmanager-validation-*.md
+        retention-days: 30
+
+  test-stack-deployment:
+    runs-on: ubuntu-latest
+    needs: validate-configs
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Docker
+      uses: docker/setup-buildx-action@v3
+    
+    - name: Start Observability Stack
+      run: |
+        docker-compose -f docker-compose.yml up -d
+        docker-compose -f docker-compose.monitoring.yml up -d
+    
+    - name: Wait for services to be ready
+      run: |
+        echo "Waiting for services to start..."
+        sleep 30
+        
+        # Check Prometheus
+        timeout 60 bash -c 'until curl -f http://localhost:9090/-/ready; do sleep 2; done'
+        
+        # Check Alertmanager
+        timeout 60 bash -c 'until curl -f http://localhost:9093/-/ready; do sleep 2; done'
+        
+        # Check Grafana
+        timeout 60 bash -c 'until curl -f http://localhost:3000/api/health; do sleep 2; done'
+    
+    - name: Test Connectivity
+      run: |
+        chmod +x examples/validation/validate-prometheus.sh
+        ./examples/validation/validate-prometheus.sh --test-connectivity
+        
+        chmod +x examples/validation/validate-alertmanager.sh
+        ./examples/validation/validate-alertmanager.sh --test-connectivity
+    
+    - name: Test Prometheus Queries
+      run: |
+        # Test basic queries
+        curl -G 'http://localhost:9090/api/v1/query' --data-urlencode 'query=up'
+        curl -G 'http://localhost:9090/api/v1/query' --data-urlencode 'query=prometheus_config_last_reload_successful'
+    
+    - name: Test Alertmanager API
+      run: |
+        # Test Alertmanager API
+        curl http://localhost:9093/api/v1/status
+        curl http://localhost:9093/api/v1/receivers
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose -f docker-compose.monitoring.yml down
+        docker-compose -f docker-compose.yml down
+        docker system prune -f
+
+---
+# GitLab CI Example
+# .gitlab-ci.yml
+stages:
+  - validate
+  - test
+  - deploy
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: "/certs"
+
+validate-prometheus:
+  stage: validate
+  image: prom/prometheus:latest
+  script:
+    - promtool check config examples/prometheus.yml
+    - promtool check rules examples/rules/*.yml
+  only:
+    changes:
+      - examples/prometheus.yml
+      - examples/rules/**/*
+
+validate-alertmanager:
+  stage: validate
+  image: prom/alertmanager:latest
+  script:
+    - amtool check-config examples/alertmanager.yml
+  only:
+    changes:
+      - examples/alertmanager.yml
+      - examples/receivers.d/**/*
+
+validate-docker-compose:
+  stage: validate
+  image: docker/compose:latest
+  services:
+    - docker:dind
+  script:
+    - docker-compose -f docker-compose.yml config
+    - docker-compose -f docker-compose.monitoring.yml config
+  only:
+    changes:
+      - docker-compose*.yml
+
+test-stack:
+  stage: test
+  image: docker:latest
+  services:
+    - docker:dind
+  before_script:
+    - apk add --no-cache curl bash
+    - docker-compose --version
+  script:
+    - docker-compose -f docker-compose.yml up -d
+    - docker-compose -f docker-compose.monitoring.yml up -d
+    - sleep 30
+    - curl -f http://localhost:9090/-/ready
+    - curl -f http://localhost:9093/-/ready
+    - curl -f http://localhost:3000/api/health
+  after_script:
+    - docker-compose -f docker-compose.monitoring.yml down
+    - docker-compose -f docker-compose.yml down
+  only:
+    - merge_requests
+    - main
+
+---
+# Azure DevOps Example
+# azure-pipelines.yml
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  paths:
+    include:
+      - examples/*
+      - docker-compose*.yml
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+stages:
+- stage: Validate
+  displayName: 'Validate Configurations'
+  jobs:
+  - job: ValidateConfigs
+    displayName: 'Validate Prometheus and Alertmanager'
+    steps:
+    - task: Bash@3
+      displayName: 'Install Tools'
+      inputs:
+        targetType: 'inline'
+        script: |
+          # Install promtool
+          wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+          tar xzf prometheus-2.45.0.linux-amd64.tar.gz
+          sudo cp prometheus-2.45.0.linux-amd64/promtool /usr/local/bin/
+          
+          # Install amtool
+          wget https://github.com/prometheus/alertmanager/releases/download/v0.26.0/alertmanager-0.26.0.linux-amd64.tar.gz
+          tar xzf alertmanager-0.26.0.linux-amd64.tar.gz
+          sudo cp alertmanager-0.26.0.linux-amd64/amtool /usr/local/bin/
+    
+    - task: Bash@3
+      displayName: 'Validate Prometheus'
+      inputs:
+        targetType: 'inline'
+        script: |
+          chmod +x examples/validation/validate-prometheus.sh
+          ./examples/validation/validate-prometheus.sh
+    
+    - task: Bash@3
+      displayName: 'Validate Alertmanager'
+      inputs:
+        targetType: 'inline'
+        script: |
+          chmod +x examples/validation/validate-alertmanager.sh
+          ./examples/validation/validate-alertmanager.sh
+    
+    - task: DockerCompose@0
+      displayName: 'Validate Docker Compose'
+      inputs:
+        action: 'Run a Docker Compose command'
+        dockerComposeFile: 'docker-compose.yml'
+        dockerComposeCommand: 'config'
+
+- stage: Test
+  displayName: 'Test Stack Deployment'
+  dependsOn: Validate
+  condition: succeeded()
+  jobs:
+  - job: TestStack
+    displayName: 'Test Full Stack'
+    steps:
+    - task: DockerCompose@0
+      displayName: 'Start Stack'
+      inputs:
+        action: 'Run services'
+        dockerComposeFile: 'docker-compose.yml'
+        buildImages: false
+        detached: true
+    
+    - task: DockerCompose@0
+      displayName: 'Start Monitoring'
+      inputs:
+        action: 'Run services'
+        dockerComposeFile: 'docker-compose.monitoring.yml'
+        buildImages: false
+        detached: true
+    
+    - task: Bash@3
+      displayName: 'Test Connectivity'
+      inputs:
+        targetType: 'inline'
+        script: |
+          sleep 30
+          curl -f http://localhost:9090/-/ready
+          curl -f http://localhost:9093/-/ready
+          curl -f http://localhost:3000/api/health
+    
+    - task: DockerCompose@0
+      displayName: 'Cleanup'
+      condition: always()
+      inputs:
+        action: 'Run a Docker Compose command'
+        dockerComposeFile: 'docker-compose.yml'
+        dockerComposeCommand: 'down'
+
+---
+# Jenkins Pipeline Example
+# Jenkinsfile
+pipeline {
+    agent any
+    
+    environment {
+        DOCKER_COMPOSE_VERSION = '2.20.0'
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+        
+        stage('Install Tools') {
+            steps {
+                sh '''
+                    # Install promtool
+                    wget -q https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+                    tar xzf prometheus-2.45.0.linux-amd64.tar.gz
+                    sudo cp prometheus-2.45.0.linux-amd64/promtool /usr/local/bin/
+                    
+                    # Install amtool
+                    wget -q https://github.com/prometheus/alertmanager/releases/download/v0.26.0/alertmanager-0.26.0.linux-amd64.tar.gz
+                    tar xzf alertmanager-0.26.0.linux-amd64.tar.gz
+                    sudo cp alertmanager-0.26.0.linux-amd64/amtool /usr/local/bin/
+                '''
+            }
+        }
+        
+        stage('Validate Configurations') {
+            parallel {
+                stage('Prometheus') {
+                    steps {
+                        sh '''
+                            chmod +x examples/validation/validate-prometheus.sh
+                            ./examples/validation/validate-prometheus.sh
+                        '''
+                    }
+                }
+                
+                stage('Alertmanager') {
+                    steps {
+                        sh '''
+                            chmod +x examples/validation/validate-alertmanager.sh
+                            ./examples/validation/validate-alertmanager.sh
+                        '''
+                    }
+                }
+                
+                stage('Docker Compose') {
+                    steps {
+                        sh '''
+                            docker-compose -f docker-compose.yml config
+                            docker-compose -f docker-compose.monitoring.yml config
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Test Stack') {
+            when {
+                anyOf {
+                    branch 'main'
+                    changeRequest()
+                }
+            }
+            steps {
+                sh '''
+                    docker-compose -f docker-compose.yml up -d
+                    docker-compose -f docker-compose.monitoring.yml up -d
+                    
+                    # Wait for services
+                    sleep 30
+                    
+                    # Test connectivity
+                    curl -f http://localhost:9090/-/ready
+                    curl -f http://localhost:9093/-/ready
+                    curl -f http://localhost:3000/api/health
+                '''
+            }
+            post {
+                always {
+                    sh '''
+                        docker-compose -f docker-compose.monitoring.yml down
+                        docker-compose -f docker-compose.yml down
+                        docker system prune -f
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            archiveArtifacts artifacts: '**/*validation*.md', allowEmptyArchive: true
+            cleanWs()
+        }
+        
+        failure {
+            emailext (
+                subject: "Build Failed: ${env.JOB_NAME} - ${env.BUILD_NUMBER}",
+                body: "Build failed. Check console output at ${env.BUILD_URL}",
+                to: "${env.CHANGE_AUTHOR_EMAIL}"
+            )
+        }
+    }
+}
+
+---
+# Pre-commit Hook Example
+# .git/hooks/pre-commit
+#!/bin/bash
+
+# Observability Stack Pre-commit Validation
+set -e
+
+echo "Running observability stack validation..."
+
+# Check if validation scripts exist
+if [ ! -f "examples/validation/validate-prometheus.sh" ]; then
+    echo "Warning: Prometheus validation script not found"
+    exit 0
+fi
+
+if [ ! -f "examples/validation/validate-alertmanager.sh" ]; then
+    echo "Warning: Alertmanager validation script not found"
+    exit 0
+fi
+
+# Run validations
+echo "Validating Prometheus configuration..."
+chmod +x examples/validation/validate-prometheus.sh
+./examples/validation/validate-prometheus.sh
+
+echo "Validating Alertmanager configuration..."
+chmod +x examples/validation/validate-alertmanager.sh
+./examples/validation/validate-alertmanager.sh
+
+echo "Validating Docker Compose files..."
+if command -v docker-compose &> /dev/null; then
+    docker-compose -f docker-compose.yml config > /dev/null
+    docker-compose -f docker-compose.monitoring.yml config > /dev/null
+else
+    echo "Warning: docker-compose not found, skipping Docker Compose validation"
+fi
+
+echo "All validations passed!"
+
+---
+# Makefile Integration
+# Add to your Makefile
+
+.PHONY: validate validate-prometheus validate-alertmanager validate-docker test-stack
+
+# Validate all configurations
+validate: validate-prometheus validate-alertmanager validate-docker
+	@echo "All validations completed successfully!"
+
+# Validate Prometheus configuration
+validate-prometheus:
+	@echo "Validating Prometheus configuration..."
+	@chmod +x examples/validation/validate-prometheus.sh
+	@./examples/validation/validate-prometheus.sh
+
+# Validate Alertmanager configuration
+validate-alertmanager:
+	@echo "Validating Alertmanager configuration..."
+	@chmod +x examples/validation/validate-alertmanager.sh
+	@./examples/validation/validate-alertmanager.sh
+
+# Validate Docker Compose files
+validate-docker:
+	@echo "Validating Docker Compose files..."
+	@docker-compose -f docker-compose.yml config > /dev/null
+	@docker-compose -f docker-compose.monitoring.yml config > /dev/null
+	@echo "Docker Compose files are valid"
+
+# Test full stack deployment
+test-stack: validate
+	@echo "Starting observability stack for testing..."
+	@docker-compose -f docker-compose.yml up -d
+	@docker-compose -f docker-compose.monitoring.yml up -d
+	@echo "Waiting for services to be ready..."
+	@sleep 30
+	@echo "Testing connectivity..."
+	@curl -f http://localhost:9090/-/ready
+	@curl -f http://localhost:9093/-/ready
+	@curl -f http://localhost:3000/api/health
+	@echo "All services are healthy!"
+	@echo "Stopping services..."
+	@docker-compose -f docker-compose.monitoring.yml down
+	@docker-compose -f docker-compose.yml down
+	@echo "Test completed successfully!"
+
+# Generate validation reports
+reports:
+	@echo "Generating validation reports..."
+	@./examples/validation/validate-prometheus.sh --generate-report
+	@./examples/validation/validate-alertmanager.sh --generate-report
+	@echo "Reports generated successfully!"

@@ -1,0 +1,148 @@
+# =============================================================================
+# DOCKER COMPOSE OVERRIDE EXAMPLE
+# =============================================================================
+# Este arquivo mostra como sobrescrever configurações do compose.yml principal
+# Copie para docker-compose.override.yml e descomente as seções necessárias
+#
+# O Docker Compose automaticamente aplica overrides quando o arquivo existe
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # =============================================================================
+  # WINDOWS EXPORTER
+  # =============================================================================
+  # Descomente esta seção quando precisar monitorar servidores Windows
+  # IMPORTANTE: O Windows Exporter deve ser instalado nos servidores Windows
+  # 
+  # windows-exporter:
+  #   image: ghcr.io/prometheus-community/windows-exporter:latest
+  #   container_name: windows-exporter
+  #   ports:
+  #     - "${WINDOWS_EXPORTER_PORT:-9182}:9182"
+  #   environment:
+  #     - TZ=${TZ:-UTC}
+  #   networks:
+  #     - monitoring
+  #   restart: unless-stopped
+  #   # Configurações específicas do Windows Exporter
+  #   command:
+  #     - '--collectors.enabled=cpu,cs,logical_disk,memory,net,os,process,service,system'
+  #     - '--log.level=${WINDOWS_EXPORTER_LOG_LEVEL:-info}'
+
+  # =============================================================================
+  # CONFIGURAÇÕES CUSTOMIZADAS PARA DESENVOLVIMENTO
+  # =============================================================================
+  # Descomente para desenvolvimento local com configurações específicas
+  #
+  # prometheus:
+  #   # Adicionar volumes extras para desenvolvimento
+  #   volumes:
+  #     - ./dev-configs/prometheus-dev.yml:/etc/prometheus/prometheus-dev.yml
+  #   # Configurações de desenvolvimento
+  #   command:
+  #     - '--config.file=/etc/prometheus/prometheus-dev.yml'
+  #     - '--storage.tsdb.path=/prometheus'
+  #     - '--web.console.libraries=/etc/prometheus/console_libraries'
+  #     - '--web.console.templates=/etc/prometheus/consoles'
+  #     - '--storage.tsdb.retention.time=7d'  # Menor retenção para dev
+  #     - '--storage.tsdb.retention.size=1GB'  # Menor tamanho para dev
+  #     - '--web.enable-lifecycle'
+  #     - '--web.enable-admin-api'  # Habilitar API admin para dev
+  #     - '--log.level=debug'  # Mais logs para debug
+
+  # grafana:
+  #   # Configurações de desenvolvimento
+  #   environment:
+  #     - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+  #     - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+  #     - GF_USERS_ALLOW_SIGN_UP=true  # Permitir registro em dev
+  #     - GF_AUTH_ANONYMOUS_ENABLED=true  # Acesso anônimo em dev
+  #     - GF_AUTH_ANONYMOUS_ORG_ROLE=Editor
+  #     - GF_LOG_LEVEL=debug
+  #     - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-worldmap-panel
+
+  # =============================================================================
+  # EXPORTERS ADICIONAIS
+  # =============================================================================
+  # Descomente conforme necessário
+  #
+  # # MySQL Exporter
+  # mysql-exporter:
+  #   image: prom/mysqld-exporter:latest
+  #   container_name: mysql-exporter
+  #   ports:
+  #     - "9104:9104"
+  #   environment:
+  #     - DATA_SOURCE_NAME=${MYSQL_CONNECTION_STRING}
+  #     - TZ=${TZ:-UTC}
+  #   networks:
+  #     - monitoring
+  #   restart: unless-stopped
+
+  # # PostgreSQL Exporter
+  # postgres-exporter:
+  #   image: prometheuscommunity/postgres-exporter:latest
+  #   container_name: postgres-exporter
+  #   ports:
+  #     - "9187:9187"
+  #   environment:
+  #     - DATA_SOURCE_NAME=${POSTGRES_CONNECTION_STRING}
+  #     - TZ=${TZ:-UTC}
+  #   networks:
+  #     - monitoring
+  #   restart: unless-stopped
+
+  # # Redis Exporter
+  # redis-exporter:
+  #   image: oliver006/redis_exporter:latest
+  #   container_name: redis-exporter
+  #   ports:
+  #     - "9121:9121"
+  #   environment:
+  #     - REDIS_ADDR=${REDIS_URL:-redis://localhost:6379}
+  #     - TZ=${TZ:-UTC}
+  #   networks:
+  #     - monitoring
+  #   restart: unless-stopped
+
+  # # Nginx Exporter
+  # nginx-exporter:
+  #   image: nginx/nginx-prometheus-exporter:latest
+  #   container_name: nginx-exporter
+  #   ports:
+  #     - "9113:9113"
+  #   command:
+  #     - '-nginx.scrape-uri=${NGINX_STUB_STATUS_URL:-http://nginx:8080/nginx_status}'
+  #   environment:
+  #     - TZ=${TZ:-UTC}
+  #   networks:
+  #     - monitoring
+  #   restart: unless-stopped
+
+  # =============================================================================
+  # CONFIGURAÇÕES DE REDE CUSTOMIZADAS
+  # =============================================================================
+  # Descomente para configurações de rede específicas
+  #
+  # networks:
+  #   monitoring:
+  #     name: ${DOCKER_NETWORK_NAME:-monitoring}
+  #     driver: bridge
+  #     ipam:
+  #       config:
+  #         - subnet: 172.20.0.0/16
+  #           gateway: 172.20.0.1
+
+# =============================================================================
+# VOLUMES ADICIONAIS
+# =============================================================================
+# volumes:
+#   # Volume para backups
+#   backup_data:
+#     driver: local
+#     driver_opts:
+#       type: none
+#       o: bind
+#       device: ${BACKUP_PATH:-./backups}

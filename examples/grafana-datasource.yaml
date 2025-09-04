@@ -1,0 +1,183 @@
+# Configuração de Datasource do Grafana para Prometheus
+# Arquivo de provisionamento otimizado
+
+apiVersion: 1
+
+# === CONFIGURAÇÃO DE DATASOURCES ===
+datasources:
+  # Prometheus Principal
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    
+    # URL do Prometheus (usando nome do serviço Docker)
+    url: http://prometheus:9090
+    
+    # Configurações básicas
+    isDefault: true
+    editable: true
+    
+    # Configurações de conexão otimizadas
+    timeout: 60s
+    
+    # Configurações HTTP
+    httpMethod: POST  # Melhor para queries grandes
+    
+    # Configurações de cache
+    jsonData:
+      # Timeout para queries
+      timeInterval: "15s"  # Deve coincidir com scrape_interval do Prometheus
+      
+      # Configurações de query
+      queryTimeout: "60s"
+      defaultRegion: "default"
+      
+      # Configurações de HTTP
+      httpMethod: "POST"
+      
+      # Configurações de cache
+      incrementalQuerying: true
+      incrementalQueryOverlapWindow: "10m"
+      
+      # Configurações de exemplars (para tracing)
+      exemplarTraceIdDestinations:
+        - name: "trace_id"
+          datasourceUid: "jaeger"  # Se usar Jaeger
+      
+      # Configurações de alertas
+      manageAlerts: true
+      alertmanagerUid: "alertmanager"
+      
+      # Configurações de performance
+      disableMetricsLookup: false
+      customQueryParameters: ""
+      
+      # Configurações de TLS (se necessário)
+      # tlsAuth: false
+      # tlsAuthWithCACert: false
+      # tlsSkipVerify: true
+    
+    # Configurações seguras (se necessário)
+    # secureJsonData:
+    #   basicAuthPassword: "${PROMETHEUS_PASSWORD}"
+    #   tlsCACert: "${PROMETHEUS_TLS_CA_CERT}"
+    #   tlsClientCert: "${PROMETHEUS_TLS_CLIENT_CERT}"
+    #   tlsClientKey: "${PROMETHEUS_TLS_CLIENT_KEY}"
+    
+    # Configurações de autenticação básica (se necessário)
+    # basicAuth: true
+    # basicAuthUser: "${PROMETHEUS_USERNAME}"
+    
+    # Headers customizados (se necessário)
+    # jsonData:
+    #   httpHeaderName1: "Authorization"
+    # secureJsonData:
+    #   httpHeaderValue1: "Bearer ${PROMETHEUS_TOKEN}"
+    
+    # Configurações de versão
+    version: 1
+    
+    # UID único para referência
+    uid: prometheus-main
+    
+    # Configurações de organização
+    orgId: 1
+    
+  # Alertmanager (para visualizar alertas)
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    
+    isDefault: false
+    editable: true
+    
+    # Configurações específicas do Alertmanager
+    jsonData:
+      # Implementação do Alertmanager
+      implementation: "prometheus"
+      
+      # Configurações de timeout
+      timeout: 30s
+      
+      # Configurações de HTTP
+      httpMethod: "GET"
+    
+    uid: alertmanager-main
+    orgId: 1
+    version: 1
+
+# === CONFIGURAÇÕES AVANÇADAS (OPCIONAIS) ===
+
+# Exemplo de datasource adicional para métricas de longo prazo
+# (se usar Thanos, VictoriaMetrics, etc.)
+#  - name: Prometheus-LongTerm
+#    type: prometheus
+#    access: proxy
+#    url: http://thanos-query:9090
+#    
+#    isDefault: false
+#    editable: true
+#    
+#    jsonData:
+#      timeInterval: "1m"  # Intervalo maior para dados de longo prazo
+#      queryTimeout: "120s"  # Timeout maior para queries históricas
+#      httpMethod: "POST"
+#    
+#    uid: prometheus-longterm
+#    orgId: 1
+#    version: 1
+
+# Exemplo de datasource para Loki (logs)
+#  - name: Loki
+#    type: loki
+#    access: proxy
+#    url: http://loki:3100
+#    
+#    isDefault: false
+#    editable: true
+#    
+#    jsonData:
+#      timeout: 60s
+#      maxLines: 1000
+#    
+#    uid: loki-main
+#    orgId: 1
+#    version: 1
+
+# === NOTAS DE CONFIGURAÇÃO ===
+#
+# 1. PERFORMANCE:
+#    - httpMethod: POST para queries grandes
+#    - incrementalQuerying: true para melhor cache
+#    - timeInterval deve coincidir com scrape_interval
+#
+# 2. TIMEOUTS:
+#    - timeout: timeout geral de conexão
+#    - queryTimeout: timeout específico para queries
+#    - Ajuste conforme complexidade das queries
+#
+# 3. CACHE:
+#    - incrementalQueryOverlapWindow: janela de sobreposição
+#    - Melhora performance de dashboards com refresh automático
+#
+# 4. SEGURANÇA:
+#    - Use secureJsonData para credenciais
+#    - Configure TLS quando disponível
+#    - Limite acesso por network policies
+#
+# 5. ALERTAS:
+#    - manageAlerts: true permite gerenciar alertas via Grafana
+#    - alertmanagerUid: conecta com datasource do Alertmanager
+#
+# 6. EXEMPLARS:
+#    - Conecta métricas com traces (se usar tracing)
+#    - exemplarTraceIdDestinations: configura destino dos traces
+#
+# 7. ORGANIZAÇÕES:
+#    - orgId: 1 é a organização padrão
+#    - Ajuste se usar múltiplas organizações
+#
+# 8. VERSIONAMENTO:
+#    - version: incrementar ao fazer mudanças
+#    - uid: identificador único, não alterar após criação

@@ -1,0 +1,520 @@
+# ============================================================================
+# REGRAS DE ALERTA SNMP/NETWORK - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Este arquivo contém regras de alerting específicas para monitoramento de
+# dispositivos de rede via SNMP (switches, roteadores, firewalls, etc.)
+#
+# Estrutura:
+# - snmp.critical: Alertas P1 (dispositivos down, interfaces críticas)
+# - snmp.warning: Alertas P2 (performance, utilização, erros)
+# - snmp.info: Alertas P3 (informativos sobre mudanças de estado)
+# ============================================================================
+
+groups:
+  # ========================================
+  # ALERTAS CRÍTICOS SNMP (P1)
+  # ========================================
+  - name: snmp.critical
+    interval: 30s
+    rules:
+      # Dispositivo SNMP completamente down
+      - alert: SNMPDeviceDown
+        expr: up{job=~"snmp-.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          priority: P1
+          team: network
+          category: availability
+        annotations:
+          summary: "🔴 Dispositivo SNMP {{ $labels.instance }} está DOWN"
+          description: |
+            O dispositivo {{ $labels.instance }} não está respondendo via SNMP há mais de 2 minutos.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Job: {{ $labels.job }}
+            - Tipo: {{ $labels.device_type | default "Unknown" }}
+            - Localização: {{ $labels.location | default "Unknown" }}
+            - Duração: > 2 minutos
+            
+            **Ações imediatas:**
+            1. Verificar conectividade de rede: `ping {{ $labels.instance }}`
+            2. Verificar se o dispositivo está ligado
+            3. Verificar configuração SNMP no dispositivo
+            4. Verificar community string e versão SNMP
+            5. Verificar firewall/ACLs
+          runbook_url: "https://runbooks.company.com/snmp-device-down"
+          alert_id: "SNMP-001"
+
+      # Interface crítica down (uplinks, trunks)
+      - alert: CriticalInterfaceDown
+        expr: |
+          ifOperStatus{ifAlias=~".*uplink.*|.*trunk.*|.*critical.*|.*core.*",ifAdminStatus="1"} == 2
+        for: 1m
+        labels:
+          severity: critical
+          priority: P1
+          team: network
+          category: connectivity
+        annotations:
+          summary: "🔴 Interface CRÍTICA {{ $labels.ifDescr }} DOWN"
+          description: |
+            A interface crítica {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está inoperante.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Interface: {{ $labels.ifDescr }}
+            - Alias: {{ $labels.ifAlias }}
+            - Status Admin: {{ $labels.ifAdminStatus }}
+            - Status Operacional: Down
+            - Tipo: {{ $labels.ifType }}
+            
+            **Ações imediatas:**
+            1. Verificar cabo de rede e conectores
+            2. Verificar configuração da interface
+            3. Verificar equipamento conectado
+            4. Verificar logs do dispositivo
+            5. Considerar failover se disponível
+          runbook_url: "https://runbooks.company.com/critical-interface-down"
+          alert_id: "SNMP-002"
+
+      # Sistema com temperatura crítica
+      - alert: DeviceTemperatureCritical
+        expr: |
+          entPhySensorValue{entPhySensorType="8"} / entPhySensorScale{entPhySensorType="8"} > 70
+        for: 5m
+        labels:
+          severity: critical
+          priority: P1
+          team: network
+          category: hardware
+        annotations:
+          summary: "🔴 Temperatura CRÍTICA no dispositivo {{ $labels.instance }}"
+          description: |
+            O dispositivo {{ $labels.instance }} está com temperatura crítica de {{ $value }}°C.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Sensor: {{ $labels.entPhysicalDescr }}
+            - Temperatura: {{ $value }}°C
+            - Threshold crítico: 70°C
+            - Duração: > 5 minutos
+            
+            **Ações imediatas:**
+            1. Verificar ventilação e ar condicionado
+            2. Verificar funcionamento dos fans
+            3. Limpar filtros de ar se necessário
+            4. Verificar carga de trabalho do dispositivo
+            5. Considerar shutdown preventivo se necessário
+          runbook_url: "https://runbooks.company.com/device-temperature-critical"
+          alert_id: "SNMP-003"
+
+      # Fonte de alimentação com falha
+      - alert: PowerSupplyFailure
+        expr: |
+          entPhySensorValue{entPhySensorType="6",entPhysicalDescr=~".*[Pp]ower.*[Ss]upply.*"} != 1
+        for: 1m
+        labels:
+          severity: critical
+          priority: P1
+          team: network
+          category: hardware
+        annotations:
+          summary: "🔴 FALHA na fonte de alimentação do {{ $labels.instance }}"
+          description: |
+            Detectada falha na fonte de alimentação do dispositivo {{ $labels.instance }}.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Fonte: {{ $labels.entPhysicalDescr }}
+            - Status: {{ $value }}
+            - Duração: > 1 minuto
+            
+            **Ações imediatas:**
+            1. Verificar LEDs de status da fonte
+            2. Verificar conexões de energia
+            3. Verificar se há fonte redundante
+            4. Planejar substituição da fonte
+            5. Monitorar estabilidade do dispositivo
+          runbook_url: "https://runbooks.company.com/power-supply-failure"
+          alert_id: "SNMP-004"
+
+      # CPU crítica em dispositivo de rede
+      - alert: NetworkDeviceCPUCritical
+        expr: |
+          cpmCPUTotal5minRev{cpmCPUTotalIndex="1"} > 90
+        for: 5m
+        labels:
+          severity: critical
+          priority: P1
+          team: network
+          category: performance
+        annotations:
+          summary: "🔴 CPU CRÍTICA no dispositivo {{ $labels.instance }}"
+          description: |
+            O dispositivo {{ $labels.instance }} está com CPU em {{ $value }}% há mais de 5 minutos.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - CPU usage: {{ $value }}%
+            - Threshold crítico: 90%
+            - Duração: > 5 minutos
+            
+            **Ações imediatas:**
+            1. Verificar processos consumindo CPU
+            2. Verificar tráfego de rede anômalo
+            3. Verificar ataques DDoS
+            4. Considerar redistribuição de tráfego
+            5. Verificar configurações de QoS
+          runbook_url: "https://runbooks.company.com/network-device-cpu-critical"
+          alert_id: "SNMP-005"
+
+  # ========================================
+  # ALERTAS DE WARNING SNMP (P2)
+  # ========================================
+  - name: snmp.warning
+    interval: 60s
+    rules:
+      # Interface com alta utilização
+      - alert: InterfaceHighUtilization
+        expr: |
+          (
+            (
+              rate(ifInOctets[5m]) + rate(ifOutOctets[5m])
+            ) * 8 / ifSpeed
+          ) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: performance
+        annotations:
+          summary: "⚠️ Interface {{ $labels.ifDescr }} com alta utilização"
+          description: |
+            A interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está com {{ printf "%.1f" ($value * 100) }}% de utilização.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Interface: {{ $labels.ifDescr }}
+            - Alias: {{ $labels.ifAlias }}
+            - Utilização: {{ printf "%.1f" ($value * 100) }}%
+            - Velocidade: {{ $labels.ifSpeed | humanize }}bps
+            - Threshold: 80%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Analisar padrões de tráfego
+            2. Verificar se é pico esperado
+            3. Considerar upgrade de link
+            4. Implementar QoS se necessário
+            5. Balancear tráfego se possível
+          runbook_url: "https://runbooks.company.com/interface-high-utilization"
+          alert_id: "SNMP-006"
+
+      # Erros de interface altos
+      - alert: InterfaceHighErrors
+        expr: |
+          (
+            rate(ifInErrors[5m]) + rate(ifOutErrors[5m])
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: quality
+        annotations:
+          summary: "⚠️ Interface {{ $labels.ifDescr }} com muitos erros"
+          description: |
+            A interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} tem {{ printf "%.1f" $value }} erros por segundo.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Interface: {{ $labels.ifDescr }}
+            - Alias: {{ $labels.ifAlias }}
+            - Erros/s: {{ printf "%.1f" $value }}
+            - Threshold: 10 erros/s
+            - Duração: > 5 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar qualidade do cabo
+            2. Verificar conectores e patch panels
+            3. Verificar configuração de duplex/speed
+            4. Analisar logs de erros específicos
+            5. Considerar substituição de cabo
+          runbook_url: "https://runbooks.company.com/interface-high-errors"
+          alert_id: "SNMP-007"
+
+      # Descartes de pacotes altos
+      - alert: InterfaceHighDiscards
+        expr: |
+          (
+            rate(ifInDiscards[5m]) + rate(ifOutDiscards[5m])
+          ) > 50
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: performance
+        annotations:
+          summary: "⚠️ Interface {{ $labels.ifDescr }} descartando pacotes"
+          description: |
+            A interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está descartando {{ printf "%.1f" $value }} pacotes por segundo.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Interface: {{ $labels.ifDescr }}
+            - Alias: {{ $labels.ifAlias }}
+            - Descartes/s: {{ printf "%.1f" $value }}
+            - Threshold: 50 descartes/s
+            - Duração: > 5 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar buffers da interface
+            2. Verificar congestionamento
+            3. Analisar políticas de QoS
+            4. Verificar capacidade de processamento
+            5. Considerar otimizações de tráfego
+          runbook_url: "https://runbooks.company.com/interface-high-discards"
+          alert_id: "SNMP-008"
+
+      # Temperatura alta (warning)
+      - alert: DeviceTemperatureWarning
+        expr: |
+          entPhySensorValue{entPhySensorType="8"} / entPhySensorScale{entPhySensorType="8"} > 60
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: hardware
+        annotations:
+          summary: "⚠️ Temperatura alta no dispositivo {{ $labels.instance }}"
+          description: |
+            O dispositivo {{ $labels.instance }} está com temperatura de {{ $value }}°C.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Sensor: {{ $labels.entPhysicalDescr }}
+            - Temperatura: {{ $value }}°C
+            - Threshold warning: 60°C
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Monitorar tendência de temperatura
+            2. Verificar ventilação do rack
+            3. Verificar filtros de ar
+            4. Planejar manutenção preventiva
+          runbook_url: "https://runbooks.company.com/device-temperature-warning"
+          alert_id: "SNMP-009"
+
+      # CPU alta em dispositivo de rede
+      - alert: NetworkDeviceCPUHigh
+        expr: |
+          cpmCPUTotal5minRev{cpmCPUTotalIndex="1"} > 80
+        for: 15m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: performance
+        annotations:
+          summary: "⚠️ CPU alta no dispositivo {{ $labels.instance }}"
+          description: |
+            O dispositivo {{ $labels.instance }} está com CPU em {{ $value }}% há mais de 15 minutos.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - CPU usage: {{ $value }}%
+            - Threshold: 80%
+            - Duração: > 15 minutos
+            
+            **Ações recomendadas:**
+            1. Monitorar padrões de uso
+            2. Verificar picos de tráfego
+            3. Analisar processos em execução
+            4. Considerar otimizações de configuração
+          runbook_url: "https://runbooks.company.com/network-device-cpu-high"
+          alert_id: "SNMP-010"
+
+      # Memória alta em dispositivo
+      - alert: NetworkDeviceMemoryHigh
+        expr: |
+          (
+            ciscoMemoryPoolUsed / (ciscoMemoryPoolUsed + ciscoMemoryPoolFree) * 100
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: memory
+        annotations:
+          summary: "⚠️ Memória alta no dispositivo {{ $labels.instance }}"
+          description: |
+            O dispositivo {{ $labels.instance }} está com {{ printf "%.1f" $value }}% de uso de memória.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Pool: {{ $labels.ciscoMemoryPoolName }}
+            - Memory usage: {{ printf "%.1f" $value }}%
+            - Threshold: 85%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar tabelas de roteamento grandes
+            2. Verificar cache excessivo
+            3. Analisar configurações de memória
+            4. Considerar limpeza de cache
+          runbook_url: "https://runbooks.company.com/network-device-memory-high"
+          alert_id: "SNMP-011"
+
+      # Interface flapping (mudanças frequentes de estado)
+      - alert: InterfaceFlapping
+        expr: |
+          changes(ifOperStatus[10m]) > 4
+        for: 1m
+        labels:
+          severity: warning
+          priority: P2
+          team: network
+          category: stability
+        annotations:
+          summary: "⚠️ Interface {{ $labels.ifDescr }} com flapping"
+          description: |
+            A interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} mudou de estado {{ $value }} vezes em 10 minutos.
+            
+            **Detalhes:**
+            - Dispositivo: {{ $labels.instance }}
+            - Interface: {{ $labels.ifDescr }}
+            - Alias: {{ $labels.ifAlias }}
+            - Mudanças: {{ $value }} em 10 minutos
+            - Threshold: > 4 mudanças
+            
+            **Ações recomendadas:**
+            1. Verificar estabilidade do cabo
+            2. Verificar fonte de alimentação
+            3. Verificar equipamento conectado
+            4. Analisar logs de interface
+            5. Verificar configuração de STP
+          runbook_url: "https://runbooks.company.com/interface-flapping"
+          alert_id: "SNMP-012"
+
+  # ========================================
+  # ALERTAS INFORMATIVOS SNMP (P3)
+  # ========================================
+  - name: snmp.info
+    interval: 300s  # 5 minutos
+    rules:
+      # Interface mudou para up
+      - alert: InterfaceUp
+        expr: |
+          ifOperStatus == 1 and ifOperStatus offset 5m == 2
+        for: 1m
+        labels:
+          severity: info
+          priority: P3
+          team: network
+          category: connectivity
+        annotations:
+          summary: "ℹ️ Interface {{ $labels.ifDescr }} voltou ao ar"
+          description: |
+            A interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} voltou a funcionar.
+            
+            **Informações:**
+            - Dispositivo: {{ $labels.instance }}
+            - Interface: {{ $labels.ifDescr }}
+            - Alias: {{ $labels.ifAlias }}
+            - Status: Up
+            
+            **Verificações recomendadas:**
+            1. Confirmar funcionamento normal
+            2. Verificar tráfego na interface
+            3. Validar conectividade end-to-end
+          alert_id: "SNMP-013"
+
+      # Dispositivo reiniciado
+      - alert: DeviceReboot
+        expr: |
+          sysUpTime / 100 < 300  # Menos de 5 minutos de uptime
+        for: 1m
+        labels:
+          severity: info
+          priority: P3
+          team: network
+          category: maintenance
+        annotations:
+          summary: "ℹ️ Dispositivo {{ $labels.instance }} foi reiniciado"
+          description: |
+            O dispositivo {{ $labels.instance }} foi reiniciado recentemente.
+            
+            **Informações:**
+            - Dispositivo: {{ $labels.instance }}
+            - Uptime: {{ $value | humanizeDuration }}
+            - Detecção: sysUpTime < 5 minutos
+            
+            **Verificações recomendadas:**
+            1. Confirmar se foi manutenção planejada
+            2. Verificar se todas as interfaces subiram
+            3. Validar protocolos de roteamento
+            4. Verificar logs de boot
+          alert_id: "SNMP-014"
+
+# ============================================================================
+# NOTAS DE CONFIGURAÇÃO SNMP
+# ============================================================================
+#
+# 1. MÉTRICAS PRINCIPAIS:
+#    - up: Status de conectividade SNMP
+#    - ifOperStatus/ifAdminStatus: Status das interfaces
+#    - ifInOctets/ifOutOctets: Tráfego de rede
+#    - ifInErrors/ifOutErrors: Erros de interface
+#    - ifInDiscards/ifOutDiscards: Descartes de pacotes
+#    - ifSpeed: Velocidade da interface
+#    - sysUpTime: Tempo de funcionamento do dispositivo
+#    - entPhySensorValue: Valores de sensores (temperatura, etc.)
+#    - cpmCPUTotal5minRev: CPU usage (Cisco)
+#    - ciscoMemoryPoolUsed/Free: Uso de memória (Cisco)
+#
+# 2. FILTROS E LABELS:
+#    - job=~"snmp-.*": Jobs SNMP específicos
+#    - ifAlias=~".*uplink.*|.*trunk.*": Interfaces críticas
+#    - entPhySensorType="8": Sensores de temperatura
+#    - entPhySensorType="6": Sensores de status
+#
+# 3. THRESHOLDS RECOMENDADOS:
+#    - Interface utilization: 80% warning
+#    - Interface errors: 10/s warning
+#    - Interface discards: 50/s warning
+#    - Temperature: 60°C warning, 70°C critical
+#    - CPU: 80% warning, 90% critical
+#    - Memory: 85% warning
+#    - Interface flapping: > 4 changes/10min
+#
+# 4. TEMPOS DE FOR:
+#    - Device down: 2 minutos
+#    - Interface critical: 1 minuto
+#    - Performance issues: 5-15 minutos
+#    - Temperature: 5-10 minutos
+#    - Info alerts: 1 minuto
+#
+# 5. LABELS OBRIGATÓRIOS:
+#    - severity: critical/warning/info
+#    - priority: P1/P2/P3
+#    - team: network (responsável por rede)
+#    - category: availability/performance/hardware/etc
+#
+# 6. CONFIGURAÇÃO SNMP EXPORTER:
+#    - Configure módulos específicos por tipo de dispositivo
+#    - Use community strings seguros
+#    - Configure timeouts adequados
+#    - Implemente SNMPv3 quando possível
+#
+# 7. COMANDOS DE VALIDAÇÃO:
+#    promtool check rules snmp.yml
+#    promtool query instant 'up{job=~"snmp-.*"}'
+#    snmpwalk -v2c -c public <device> 1.3.6.1.2.1.2.2.1.8
+# ============================================================================

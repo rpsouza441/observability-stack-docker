@@ -1,0 +1,139 @@
+# ============================================================================
+# GRAFANA DATASOURCES - PROMETHEUS
+# ============================================================================
+# Configuração modular de datasources do Grafana para Prometheus
+# Este arquivo define as conexões com instâncias do Prometheus
+# ============================================================================
+
+apiVersion: 1
+
+# ========================================
+# DATASOURCES PROMETHEUS
+# ========================================
+datasources:
+  # Prometheus Principal - Produção
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: true
+      alertmanagerUid: alertmanager
+      prometheusType: Prometheus
+      prometheusVersion: 2.45.0
+      cacheLevel: 'High'
+      disableRecordingRules: false
+      incrementalQueryOverlapWindow: 10m
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger
+    secureJsonData:
+      # Adicione credenciais se necessário
+      # httpHeaderValue1: 'Bearer token_here'
+    uid: prometheus
+    version: 1
+
+  # Prometheus Alertmanager
+  - name: Alertmanager
+    type: alertmanager
+    access: proxy
+    url: http://alertmanager:9093
+    isDefault: false
+    editable: true
+    jsonData:
+      implementation: prometheus
+      handleGrafanaManagedAlerts: true
+    uid: alertmanager
+    version: 1
+
+  # Prometheus Long-term Storage (Thanos/VictoriaMetrics)
+  - name: Prometheus-LTS
+    type: prometheus
+    access: proxy
+    url: http://thanos-query:9090
+    isDefault: false
+    editable: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: false
+      prometheusType: Thanos
+      prometheusVersion: 0.32.0
+      cacheLevel: 'Medium'
+      timeInterval: '30s'
+      queryTimeout: '60s'
+      # Configurações específicas para long-term storage
+      customQueryParameters: 'max_source_resolution=5m&partial_response=true'
+    uid: prometheus-lts
+    version: 1
+
+  # Prometheus Federado (se aplicável)
+  - name: Prometheus-Federation
+    type: prometheus
+    access: proxy
+    url: http://prometheus-federation:9090
+    isDefault: false
+    editable: true
+    jsonData:
+      httpMethod: POST
+      manageAlerts: false
+      prometheusType: Prometheus
+      prometheusVersion: 2.45.0
+      cacheLevel: 'Low'
+      # Configurações para federação
+      customQueryParameters: 'timeout=30s'
+    uid: prometheus-federation
+    version: 1
+
+# ============================================================================
+# CONFIGURAÇÕES AVANÇADAS
+# ============================================================================
+#
+# 1. TIPOS DE DATASOURCE:
+#    - prometheus: Instância padrão do Prometheus
+#    - alertmanager: Alertmanager para gerenciamento de alertas
+#    - thanos: Thanos Query para long-term storage
+#    - cortex: Cortex para multi-tenancy
+#    - mimir: Grafana Mimir para escalabilidade
+#
+# 2. CONFIGURAÇÕES DE CACHE:
+#    - High: Cache agressivo para dashboards de produção
+#    - Medium: Cache moderado para desenvolvimento
+#    - Low: Cache mínimo para debugging
+#
+# 3. CONFIGURAÇÕES DE QUERY:
+#    - httpMethod: POST recomendado para queries grandes
+#    - queryTimeout: Timeout para queries longas
+#    - maxDataPoints: Limite de pontos de dados
+#    - interval: Intervalo mínimo entre pontos
+#
+# 4. EXEMPLAR TRACING:
+#    - Conecta métricas com traces
+#    - Requer Jaeger/Tempo configurado
+#    - Usa trace_id como correlação
+#
+# 5. ALERTING:
+#    - manageAlerts: Permite gerenciar alertas via Grafana
+#    - alertmanagerUid: UID do datasource Alertmanager
+#    - handleGrafanaManagedAlerts: Processa alertas do Grafana
+#
+# 6. SEGURANÇA:
+#    - Use secureJsonData para credenciais
+#    - Configure HTTPS quando possível
+#    - Implemente autenticação adequada
+#    - Use service accounts quando disponível
+#
+# 7. PERFORMANCE:
+#    - Configure timeouts apropriados
+#    - Use cache levels adequados
+#    - Limite maxDataPoints para dashboards
+#    - Configure intervalos mínimos
+#
+# 8. MONITORAMENTO:
+#    - Monitore latência de queries
+#    - Configure alertas para datasource down
+#    - Verifique logs de conexão regularmente
+#    - Implemente health checks
+# ============================================================================

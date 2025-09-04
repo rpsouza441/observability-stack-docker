@@ -1,0 +1,456 @@
+# ============================================================================
+# REGRAS DE ALERTA DOCKER/CONTAINERS - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Este arquivo contém regras de alerting específicas para monitoramento de containers
+# Docker e orquestração de containers, coletadas via cAdvisor
+#
+# Estrutura:
+# - docker.critical: Alertas P1 (containers críticos down, problemas graves)
+# - docker.warning: Alertas P2 (performance, recursos, restarts)
+# - docker.info: Alertas P3 (informativos sobre containers)
+# ============================================================================
+
+groups:
+  # ========================================
+  # ALERTAS CRÍTICOS DOCKER (P1)
+  # ========================================
+  - name: docker.critical
+    interval: 30s
+    rules:
+      # Container crítico parado
+      - alert: CriticalContainerDown
+        expr: |
+          (
+            container_last_seen{name!="",name!~".*_exporter.*",name!~".*test.*"} < (time() - 60)
+          )
+          and on(name) (
+            label_replace(
+              up{job="cadvisor"}, "name", "$1", "container", "(.+)"
+            ) == 0
+          )
+        for: 1m
+        labels:
+          severity: critical
+          priority: P1
+          team: platform
+          category: availability
+        annotations:
+          summary: "🔴 Container crítico {{ $labels.name }} está DOWN"
+          description: |
+            O container {{ $labels.name }} na instância {{ $labels.instance }} não está rodando há mais de 1 minuto.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Job: {{ $labels.job }}
+            - Duração: > 1 minuto
+            
+            **Ações imediatas:**
+            1. Verificar status do container: `docker ps -a`
+            2. Verificar logs: `docker logs {{ $labels.name }}`
+            3. Tentar restart: `docker restart {{ $labels.name }}`
+            4. Verificar recursos do host
+          runbook_url: "https://runbooks.company.com/container-down"
+          alert_id: "DOCKER-001"
+
+      # Container com restarts excessivos
+      - alert: ContainerHighRestartRate
+        expr: |
+          increase(container_start_time_seconds{name!="",name!~".*_exporter.*"}[1h]) > 5
+        for: 0m  # Alerta imediato
+        labels:
+          severity: critical
+          priority: P1
+          team: platform
+          category: stability
+        annotations:
+          summary: "🔴 Container {{ $labels.name }} reiniciando EXCESSIVAMENTE"
+          description: |
+            O container {{ $labels.name }} reiniciou {{ $value }} vezes na última hora.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Restarts: {{ $value }} na última hora
+            - Threshold crítico: > 5 restarts/hora
+            
+            **Ações imediatas:**
+            1. Verificar logs do container: `docker logs {{ $labels.name }}`
+            2. Verificar health checks e liveness probes
+            3. Verificar recursos disponíveis (CPU/RAM)
+            4. Verificar dependências externas
+            5. Considerar rollback se deploy recente
+          runbook_url: "https://runbooks.company.com/container-restart-loop"
+          alert_id: "DOCKER-002"
+
+      # Container usando CPU crítica
+      - alert: ContainerCPUCritical
+        expr: |
+          (
+            rate(container_cpu_usage_seconds_total{name!="",name!~".*_exporter.*"}[5m]) * 100
+          ) > 95
+        for: 5m
+        labels:
+          severity: critical
+          priority: P1
+          team: platform
+          category: performance
+        annotations:
+          summary: "🔴 Container {{ $labels.name }} com CPU CRÍTICA"
+          description: |
+            O container {{ $labels.name }} está usando {{ printf "%.1f" $value }}% de CPU há mais de 5 minutos.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - CPU usage: {{ printf "%.1f" $value }}%
+            - Threshold crítico: 95%
+            - Duração: > 5 minutos
+            
+            **Ações imediatas:**
+            1. Verificar processos dentro do container
+            2. Verificar se há CPU throttling
+            3. Considerar aumentar CPU limits
+            4. Verificar se há loops infinitos ou deadlocks
+          runbook_url: "https://runbooks.company.com/container-cpu-critical"
+          alert_id: "DOCKER-003"
+
+      # Container sem memória disponível
+      - alert: ContainerMemoryCritical
+        expr: |
+          (
+            container_memory_usage_bytes{name!="",name!~".*_exporter.*"} / 
+            container_spec_memory_limit_bytes{name!="",name!~".*_exporter.*"} * 100
+          ) > 95
+        for: 2m
+        labels:
+          severity: critical
+          priority: P1
+          team: platform
+          category: memory
+        annotations:
+          summary: "🔴 Container {{ $labels.name }} com MEMÓRIA CRÍTICA"
+          description: |
+            O container {{ $labels.name }} está usando {{ printf "%.1f" $value }}% da memória limite.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Memory usage: {{ printf "%.1f" $value }}%
+            - Threshold crítico: 95%
+            - Duração: > 2 minutos
+            
+            **Ações imediatas:**
+            1. Verificar memory leaks na aplicação
+            2. Considerar aumentar memory limits
+            3. Verificar se há OOMKilled events
+            4. Analisar heap dumps se aplicável
+          runbook_url: "https://runbooks.company.com/container-memory-critical"
+          alert_id: "DOCKER-004"
+
+  # ========================================
+  # ALERTAS DE WARNING DOCKER (P2)
+  # ========================================
+  - name: docker.warning
+    interval: 60s
+    rules:
+      # Container com CPU alta
+      - alert: ContainerHighCPUUsage
+        expr: |
+          (
+            rate(container_cpu_usage_seconds_total{name!="",name!~".*_exporter.*"}[5m]) * 100
+          ) > 80
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: platform
+          category: performance
+        annotations:
+          summary: "⚠️ Container {{ $labels.name }} com CPU alta"
+          description: |
+            O container {{ $labels.name }} está usando {{ printf "%.1f" $value }}% de CPU há mais de 10 minutos.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - CPU usage: {{ printf "%.1f" $value }}%
+            - Threshold: 80%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Monitorar tendência de uso
+            2. Verificar se é comportamento esperado
+            3. Considerar otimizações de código
+            4. Avaliar necessidade de scaling horizontal
+          runbook_url: "https://runbooks.company.com/container-high-cpu"
+          alert_id: "DOCKER-005"
+
+      # Container com memória alta
+      - alert: ContainerHighMemoryUsage
+        expr: |
+          (
+            container_memory_usage_bytes{name!="",name!~".*_exporter.*"} / 
+            container_spec_memory_limit_bytes{name!="",name!~".*_exporter.*"} * 100
+          ) > 85
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: platform
+          category: memory
+        annotations:
+          summary: "⚠️ Container {{ $labels.name }} com memória alta"
+          description: |
+            O container {{ $labels.name }} está usando {{ printf "%.1f" $value }}% da memória limite.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Memory usage: {{ printf "%.1f" $value }}%
+            - Threshold: 85%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Monitorar crescimento de memória
+            2. Verificar possíveis memory leaks
+            3. Considerar otimizações de memória
+            4. Avaliar aumento de limits se necessário
+          runbook_url: "https://runbooks.company.com/container-high-memory"
+          alert_id: "DOCKER-006"
+
+      # Container com restarts moderados
+      - alert: ContainerRestartWarning
+        expr: |
+          increase(container_start_time_seconds{name!="",name!~".*_exporter.*"}[6h]) > 2
+        for: 1m
+        labels:
+          severity: warning
+          priority: P2
+          team: platform
+          category: stability
+        annotations:
+          summary: "⚠️ Container {{ $labels.name }} reiniciando frequentemente"
+          description: |
+            O container {{ $labels.name }} reiniciou {{ $value }} vezes nas últimas 6 horas.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Restarts: {{ $value }} em 6 horas
+            - Threshold: > 2 restarts/6h
+            
+            **Ações recomendadas:**
+            1. Verificar logs para padrões de erro
+            2. Verificar health checks
+            3. Monitorar recursos do container
+            4. Verificar dependências externas
+          runbook_url: "https://runbooks.company.com/container-restart-warning"
+          alert_id: "DOCKER-007"
+
+      # Container com I/O de disco alto
+      - alert: ContainerHighDiskIO
+        expr: |
+          (
+            rate(container_fs_io_time_seconds_total{name!="",name!~".*_exporter.*"}[5m]) * 100
+          ) > 80
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: platform
+          category: storage
+        annotations:
+          summary: "⚠️ Container {{ $labels.name }} com I/O alto"
+          description: |
+            O container {{ $labels.name }} está com {{ printf "%.1f" $value }}% de utilização de I/O.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - I/O usage: {{ printf "%.1f" $value }}%
+            - Threshold: 80%
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar operações de I/O intensivas
+            2. Otimizar acesso a arquivos/banco
+            3. Considerar volumes mais rápidos
+            4. Verificar logs excessivos
+          runbook_url: "https://runbooks.company.com/container-high-io"
+          alert_id: "DOCKER-008"
+
+      # Container com rede alta
+      - alert: ContainerHighNetworkUsage
+        expr: |
+          (
+            rate(container_network_receive_bytes_total{name!="",name!~".*_exporter.*"}[5m]) +
+            rate(container_network_transmit_bytes_total{name!="",name!~".*_exporter.*"}[5m])
+          ) > 100 * 1024 * 1024  # 100 MB/s
+        for: 10m
+        labels:
+          severity: warning
+          priority: P2
+          team: platform
+          category: network
+        annotations:
+          summary: "⚠️ Container {{ $labels.name }} com tráfego de rede alto"
+          description: |
+            O container {{ $labels.name }} está transferindo {{ $value | humanizeBytes }}/s de dados.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Network throughput: {{ $value | humanizeBytes }}/s
+            - Threshold: 100 MB/s
+            - Duração: > 10 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar se é tráfego esperado
+            2. Analisar padrões de comunicação
+            3. Otimizar transferências de dados
+            4. Verificar possíveis loops de rede
+          runbook_url: "https://runbooks.company.com/container-high-network"
+          alert_id: "DOCKER-009"
+
+      # Container próximo do limite de file descriptors
+      - alert: ContainerHighFileDescriptors
+        expr: |
+          (
+            container_file_descriptors{name!="",name!~".*_exporter.*"} / 
+            container_ulimits_soft{name!="",name!~".*_exporter.*",ulimit="max_open_files"} * 100
+          ) > 80
+        for: 5m
+        labels:
+          severity: warning
+          priority: P2
+          team: platform
+          category: resources
+        annotations:
+          summary: "⚠️ Container {{ $labels.name }} com muitos file descriptors"
+          description: |
+            O container {{ $labels.name }} está usando {{ printf "%.1f" $value }}% dos file descriptors disponíveis.
+            
+            **Detalhes:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - FD usage: {{ printf "%.1f" $value }}%
+            - Threshold: 80%
+            - Duração: > 5 minutos
+            
+            **Ações recomendadas:**
+            1. Verificar file descriptor leaks
+            2. Verificar conexões não fechadas
+            3. Considerar aumentar ulimits
+            4. Otimizar uso de arquivos/sockets
+          runbook_url: "https://runbooks.company.com/container-high-fd"
+          alert_id: "DOCKER-010"
+
+  # ========================================
+  # ALERTAS INFORMATIVOS DOCKER (P3)
+  # ========================================
+  - name: docker.info
+    interval: 300s  # 5 minutos
+    rules:
+      # Novo container iniciado
+      - alert: ContainerStarted
+        expr: |
+          changes(container_start_time_seconds{name!="",name!~".*_exporter.*"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: info
+          priority: P3
+          team: platform
+          category: lifecycle
+        annotations:
+          summary: "ℹ️ Container {{ $labels.name }} foi iniciado"
+          description: |
+            O container {{ $labels.name }} foi iniciado recentemente.
+            
+            **Informações:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Detecção: Mudança no start time
+            
+            **Verificações recomendadas:**
+            1. Confirmar se foi deploy planejado
+            2. Verificar logs de inicialização
+            3. Validar health checks
+            4. Confirmar funcionamento da aplicação
+          alert_id: "DOCKER-011"
+
+      # Container com uptime baixo (possível restart recente)
+      - alert: ContainerLowUptime
+        expr: |
+          (time() - container_start_time_seconds{name!="",name!~".*_exporter.*"}) < 300
+        for: 1m
+        labels:
+          severity: info
+          priority: P3
+          team: platform
+          category: lifecycle
+        annotations:
+          summary: "ℹ️ Container {{ $labels.name }} com uptime baixo"
+          description: |
+            O container {{ $labels.name }} está rodando há menos de 5 minutos.
+            
+            **Informações:**
+            - Container: {{ $labels.name }}
+            - Instância: {{ $labels.instance }}
+            - Uptime: {{ $value | humanizeDuration }}
+            
+            **Verificações recomendadas:**
+            1. Verificar se foi restart planejado
+            2. Verificar logs de inicialização
+            3. Monitorar estabilidade inicial
+          alert_id: "DOCKER-012"
+
+# ============================================================================
+# NOTAS DE CONFIGURAÇÃO DOCKER
+# ============================================================================
+#
+# 1. MÉTRICAS PRINCIPAIS:
+#    - container_last_seen: Última vez que o container foi visto
+#    - container_start_time_seconds: Timestamp de início do container
+#    - container_cpu_usage_seconds_total: Uso de CPU acumulado
+#    - container_memory_usage_bytes: Uso atual de memória
+#    - container_spec_memory_limit_bytes: Limite de memória configurado
+#    - container_fs_io_time_seconds_total: Tempo de I/O de disco
+#    - container_network_*_bytes_total: Tráfego de rede
+#    - container_file_descriptors: File descriptors em uso
+#
+# 2. FILTROS IMPORTANTES:
+#    - name!="": Exclui containers sem nome
+#    - name!~".*_exporter.*": Exclui exporters do Prometheus
+#    - name!~".*test.*": Exclui containers de teste
+#
+# 3. THRESHOLDS RECOMENDADOS:
+#    - CPU: 80% warning, 95% critical
+#    - Memória: 85% warning, 95% critical
+#    - Restarts: 2/6h warning, 5/1h critical
+#    - I/O: 80% warning
+#    - Network: 100 MB/s warning
+#    - File Descriptors: 80% warning
+#
+# 4. TEMPOS DE FOR:
+#    - Críticos: 1-5 minutos
+#    - Warnings: 5-10 minutos
+#    - Info: 1 minuto
+#    - Restarts: 0m (imediato para críticos)
+#
+# 5. LABELS OBRIGATÓRIOS:
+#    - severity: critical/warning/info
+#    - priority: P1/P2/P3
+#    - team: platform (responsável por containers)
+#    - category: availability/performance/memory/stability/etc
+#
+# 6. INTEGRAÇÃO COM CADVISOR:
+#    - Certifique-se que cAdvisor está coletando métricas
+#    - Configure job="cadvisor" no prometheus.yml
+#    - Verifique se containers têm labels adequados
+#
+# 7. COMANDOS DE VALIDAÇÃO:
+#    promtool check rules docker.yml
+#    promtool query instant 'up{job="cadvisor"}'
+#    promtool query instant 'container_last_seen'
+# ============================================================================

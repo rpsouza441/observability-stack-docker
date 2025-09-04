@@ -1,0 +1,180 @@
+# Configuração de Provisionamento de Dashboards do Grafana
+# Arquivo otimizado para carregamento automático de dashboards
+
+apiVersion: 1
+
+# === PROVEDORES DE DASHBOARDS ===
+providers:
+  # Dashboards Padrão do Sistema
+  - name: 'default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30  # Verifica mudanças a cada 30s
+    allowUiUpdates: true       # Permite edição via UI
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: true  # Cria pastas baseado na estrutura de arquivos
+  
+  # Dashboards de Infraestrutura
+  - name: 'infrastructure'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/infrastructure
+      foldersFromFilesStructure: false
+  
+  # Dashboards de Rede/SNMP
+  - name: 'network'
+    orgId: 1
+    folder: 'Network'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/network
+      foldersFromFilesStructure: false
+  
+  # Dashboards de Aplicação
+  - name: 'application'
+    orgId: 1
+    folder: 'Applications'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/application
+      foldersFromFilesStructure: false
+  
+  # Dashboards de Monitoramento (Meta)
+  - name: 'monitoring'
+    orgId: 1
+    folder: 'Monitoring'
+    type: file
+    disableDeletion: true      # Não permite deletar dashboards críticos
+    updateIntervalSeconds: 30
+    allowUiUpdates: false      # Não permite edição (versionamento controlado)
+    options:
+      path: /var/lib/grafana/dashboards/monitoring
+      foldersFromFilesStructure: false
+  
+  # Dashboards Customizados/Temporários
+  - name: 'custom'
+    orgId: 1
+    folder: 'Custom'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 120  # Menos frequente para dashboards customizados
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/custom
+      foldersFromFilesStructure: true
+
+# === CONFIGURAÇÕES AVANÇADAS (OPCIONAIS) ===
+
+# Exemplo de provedor para dashboards externos (Git, HTTP, etc.)
+# - name: 'external-dashboards'
+#   orgId: 1
+#   folder: 'External'
+#   type: file
+#   disableDeletion: true
+#   updateIntervalSeconds: 300  # 5 minutos
+#   allowUiUpdates: false
+#   options:
+#     path: /var/lib/grafana/dashboards/external
+#     # Configurações para sincronização externa
+#     # (requer script customizado ou init container)
+
+# === ESTRUTURA DE PASTAS RECOMENDADA ===
+#
+# /var/lib/grafana/dashboards/
+# ├── infrastructure/
+# │   ├── node-exporter-full.json
+# │   ├── docker-containers.json
+# │   ├── system-overview.json
+# │   └── disk-space-monitoring.json
+# ├── network/
+# │   ├── snmp-interfaces.json
+# │   ├── network-traffic.json
+# │   ├── unifi-access-points.json
+# │   └── pfsense-firewall.json
+# ├── application/
+# │   ├── application-overview.json
+# │   ├── database-monitoring.json
+# │   └── web-services.json
+# ├── monitoring/
+# │   ├── prometheus-stats.json
+# │   ├── alertmanager-overview.json
+# │   └── grafana-usage.json
+# └── custom/
+#     ├── temporary-dashboard.json
+#     └── experimental/
+#         └── new-feature.json
+
+# === DASHBOARDS ESSENCIAIS RECOMENDADOS ===
+#
+# INFRAESTRUTURA:
+# 1. Node Exporter Full - Métricas completas do sistema
+# 2. Docker Container Monitoring - Métricas de containers
+# 3. System Overview - Visão geral de todos os hosts
+# 4. Disk Space Monitoring - Monitoramento de espaço em disco
+#
+# REDE:
+# 1. SNMP Interface Statistics - Estatísticas de interfaces de rede
+# 2. Network Traffic Analysis - Análise de tráfego de rede
+# 3. UniFi Access Points - Monitoramento específico de APs
+# 4. pfSense Firewall - Métricas do firewall
+#
+# APLICAÇÃO:
+# 1. Application Overview - Visão geral das aplicações
+# 2. Database Monitoring - Métricas de banco de dados
+# 3. Web Services - Monitoramento de serviços web
+#
+# MONITORAMENTO:
+# 1. Prometheus Statistics - Métricas do próprio Prometheus
+# 2. Alertmanager Overview - Status dos alertas
+# 3. Grafana Usage - Uso do próprio Grafana
+
+# === NOTAS DE CONFIGURAÇÃO ===
+#
+# 1. ORGANIZAÇÃO:
+#    - orgId: 1 é a organização padrão
+#    - folder: nome da pasta no Grafana UI
+#    - Organize dashboards por domínio/responsabilidade
+#
+# 2. ATUALIZAÇÕES:
+#    - updateIntervalSeconds: frequência de verificação de mudanças
+#    - allowUiUpdates: permite edição via interface
+#    - disableDeletion: protege dashboards críticos
+#
+# 3. ESTRUTURA DE ARQUIVOS:
+#    - foldersFromFilesStructure: cria pastas baseado na estrutura
+#    - path: caminho no container onde estão os dashboards
+#    - Use estrutura hierárquica para organização
+#
+# 4. VERSIONAMENTO:
+#    - Dashboards críticos: allowUiUpdates: false
+#    - Controle via Git para dashboards importantes
+#    - Backup regular de dashboards customizados
+#
+# 5. PERFORMANCE:
+#    - updateIntervalSeconds menor para dashboards críticos
+#    - Maior para dashboards menos importantes
+#    - Considere impacto no I/O do sistema
+#
+# 6. SEGURANÇA:
+#    - disableDeletion: true para dashboards críticos
+#    - Controle de acesso via pastas/organizações
+#    - Backup de configurações importantes
+#
+# 7. MANUTENÇÃO:
+#    - Remova dashboards não utilizados regularmente
+#    - Monitore uso via Grafana analytics
+#    - Documente propósito de cada dashboard

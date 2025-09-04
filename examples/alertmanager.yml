@@ -1,0 +1,358 @@
+# ============================================================================
+# ALERTMANAGER - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Este arquivo contém a configuração principal do Alertmanager com estrutura
+# modular que permite separar receivers, templates e rotas em arquivos dedicados.
+#
+# Estrutura modular:
+# - alertmanager.yml: Configuração principal com rotas e configurações globais
+# - receivers.d/*.yml: Arquivos específicos para cada tipo de receiver
+# - templates/: Templates personalizados para notificações
+#
+# Benefícios:
+# - Facilita manutenção por equipes diferentes
+# - Permite validação incremental
+# - Melhora organização e escalabilidade
+# - Reduz conflitos em alterações simultâneas
+# ============================================================================
+
+# ========================================
+# CONFIGURAÇÕES GLOBAIS
+# ========================================
+global:
+  # SMTP configuration for email notifications
+  smtp_smarthost: '${SMTP_SMARTHOST:-smtp.company.com:587}'
+  smtp_from: '${SMTP_FROM:-alertmanager@company.com}'
+  smtp_auth_username: '${SMTP_AUTH_USERNAME}'
+  smtp_auth_password: '${SMTP_AUTH_PASSWORD}'
+  smtp_require_tls: true
+  
+  # Global templates
+  templates:
+    - '/etc/alertmanager/templates/*.tmpl'
+  
+  # Resolve timeout - how long to wait before sending a resolve notification
+  resolve_timeout: 5m
+  
+  # HTTP configuration
+  http_config:
+    tls_config:
+      insecure_skip_verify: false
+
+# ========================================
+# TEMPLATES PERSONALIZADOS
+# ========================================
+templates:
+  - '/etc/alertmanager/templates/custom.tmpl'
+  - '/etc/alertmanager/templates/slack.tmpl'
+  - '/etc/alertmanager/templates/teams.tmpl'
+
+# ========================================
+# CONFIGURAÇÃO DE ROTAS PRINCIPAL
+# ========================================
+# A árvore de rotas define como os alertas são roteados para diferentes receivers
+# baseado em labels e condições específicas.
+route:
+  # Receiver padrão para alertas não categorizados
+  receiver: 'default-notifications'
+  
+  # Tempo para agrupar alertas antes de enviar notificação
+  group_wait: ${ALERT_GROUP_WAIT:-30s}
+  
+  # Tempo para aguardar alertas adicionais antes de enviar atualização
+  group_interval: ${ALERT_GROUP_INTERVAL:-5m}
+  
+  # Tempo mínimo entre notificações do mesmo grupo
+  repeat_interval: ${ALERT_REPEAT_INTERVAL:-4h}
+  
+  # Labels usados para agrupar alertas
+  group_by: ['alertname', 'cluster', 'service', 'severity']
+  
+  # ========================================
+  # ROTAS ESPECÍFICAS POR EQUIPE/SERVIÇO
+  # ========================================
+  routes:
+    # =====================================
+    # ALERTAS CRÍTICOS (P1) - SEMPRE NOTIFICAR
+    # =====================================
+    - match:
+        severity: critical
+      receiver: 'critical-alerts'
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 30m
+      routes:
+        # Infraestrutura crítica -> Equipe SRE + PagerDuty
+        - match:
+            team: sre
+          receiver: 'sre-critical'
+          continue: true  # Continua para outros receivers
+        
+        # Aplicações críticas -> Equipe Dev + Slack
+        - match:
+            team: development
+          receiver: 'dev-critical'
+          continue: true
+        
+        # Rede crítica -> Equipe Network + Teams
+        - match:
+            team: network
+          receiver: 'network-critical'
+          continue: true
+    
+    # ROTA 2: Alertas de Infraestrutura
+    - match_re:
+        job: '^(node-exporter|cadvisor|snmp-.*)$'
+      receiver: 'infrastructure-alerts'
+      group_by: ['alertname', 'instance', 'job']
+      group_wait: 1m
+      group_interval: 5m
+      repeat_interval: 2h
+    
+    # ROTA 3: Alertas de Rede/SNMP
+    - match_re:
+        job: '^snmp-.*$'
+      receiver: 'network-alerts'
+      group_by: ['alertname', 'instance', 'device_type']
+      group_wait: 2m           # Dispositivos de rede podem ter flapping
+      group_interval: 10m
+      repeat_interval: 1h
+    
+    # ROTA 4: Alertas de Monitoramento (Meta)
+    - match_re:
+        job: '^(prometheus|alertmanager|grafana)$'
+      receiver: 'monitoring-alerts'
+      group_by: ['alertname', 'job']
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 6h      # Menos frequente para meta-monitoring
+    
+    # ROTA 5: Alertas de Aplicação
+    - match:
+        team: application
+      receiver: 'application-alerts'
+      group_by: ['alertname', 'service', 'environment']
+      group_wait: 2m
+      group_interval: 5m
+      repeat_interval: 1h
+
+# === RECEPTORES DE ALERTA ===
+receivers:
+  # RECEPTOR PADRÃO - Webhook para n8n
+  - name: 'default-webhook'
+    webhook_configs:
+      - url: '${N8N_WEBHOOK_URL:-http://n8n:5678/webhook/alerts}'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: '${N8N_WEBHOOK_USERNAME}'
+            password: '${N8N_WEBHOOK_PASSWORD}'
+        title: 'Alerta: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          {{ range .Alerts }}
+          **Alerta:** {{ .Annotations.summary }}
+          **Severidade:** {{ .Labels.severity }}
+          **Instância:** {{ .Labels.instance }}
+          **Descrição:** {{ .Annotations.description }}
+          **Status:** {{ .Status }}
+          {{ end }}
+  
+  # ALERTAS CRÍTICOS - Múltiplos canais
+  - name: 'critical-alerts'
+    # Webhook principal para n8n
+    webhook_configs:
+      - url: '${N8N_WEBHOOK_URL_CRITICAL:-http://n8n:5678/webhook/critical-alerts}'
+        send_resolved: true
+        title: '🚨 CRÍTICO: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          🚨 **ALERTA CRÍTICO** 🚨
+          
+          {{ range .Alerts }}
+          **Alerta:** {{ .Annotations.summary }}
+          **Prioridade:** {{ .Labels.priority }}
+          **Instância:** {{ .Labels.instance }}
+          **Time Responsável:** {{ .Labels.team }}
+          **Descrição:** {{ .Annotations.description }}
+          **Runbook:** {{ .Annotations.runbook_url }}
+          **Status:** {{ .Status }}
+          **Horário:** {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+          {{ end }}
+    
+    # Slack como backup (opcional)
+    # slack_configs:
+    #   - api_url: '${SLACK_API_URL}'
+    #     channel: '${SLACK_CRITICAL_CHANNEL:-#alerts-critical}'
+    #     title: '🚨 Alerta Crítico'
+    #     text: |
+    #       {{ range .Alerts }}
+    #       *{{ .Annotations.summary }}*
+    #       Severidade: {{ .Labels.severity }}
+    #       Instância: {{ .Labels.instance }}
+    #       {{ .Annotations.description }}
+    #       {{ end }}
+    
+    # E-mail como fallback
+    email_configs:
+      - to: '${CRITICAL_EMAIL_TO:-oncall@company.com}'
+        from: '${SMTP_FROM:-alerts@company.com}'
+        subject: '🚨 CRÍTICO: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        html: |
+          <h2 style="color: red;">🚨 ALERTA CRÍTICO</h2>
+          {{ range .Alerts }}
+          <h3>{{ .Annotations.summary }}</h3>
+          <p><strong>Prioridade:</strong> {{ .Labels.priority }}</p>
+          <p><strong>Instância:</strong> {{ .Labels.instance }}</p>
+          <p><strong>Time:</strong> {{ .Labels.team }}</p>
+          <p><strong>Descrição:</strong> {{ .Annotations.description }}</p>
+          <p><strong>Status:</strong> {{ .Status }}</p>
+          <p><strong>Horário:</strong> {{ .StartsAt.Format "2006-01-02 15:04:05" }}</p>
+          {{ if .Annotations.runbook_url }}
+          <p><a href="{{ .Annotations.runbook_url }}">📖 Runbook</a></p>
+          {{ end }}
+          <hr>
+          {{ end }}
+  
+  # ALERTAS DE INFRAESTRUTURA
+  - name: 'infrastructure-alerts'
+    webhook_configs:
+      - url: '${N8N_WEBHOOK_URL_INFRA:-http://n8n:5678/webhook/infrastructure-alerts}'
+        send_resolved: true
+        title: '🏗️ Infraestrutura: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          🏗️ **Alerta de Infraestrutura**
+          
+          {{ range .Alerts }}
+          **Alerta:** {{ .Annotations.summary }}
+          **Severidade:** {{ .Labels.severity }}
+          **Host:** {{ .Labels.instance }}
+          **Job:** {{ .Labels.job }}
+          **Descrição:** {{ .Annotations.description }}
+          **Status:** {{ .Status }}
+          {{ end }}
+  
+  # ALERTAS DE REDE
+  - name: 'network-alerts'
+    webhook_configs:
+      - url: '${N8N_WEBHOOK_URL_NETWORK:-http://n8n:5678/webhook/network-alerts}'
+        send_resolved: true
+        title: '🌐 Rede: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          🌐 **Alerta de Rede**
+          
+          {{ range .Alerts }}
+          **Alerta:** {{ .Annotations.summary }}
+          **Dispositivo:** {{ .Labels.instance }}
+          **Tipo:** {{ .Labels.device_type }}
+          **Interface:** {{ .Labels.ifDescr }}
+          **Descrição:** {{ .Annotations.description }}
+          **Status:** {{ .Status }}
+          {{ end }}
+  
+  # ALERTAS DE MONITORAMENTO
+  - name: 'monitoring-alerts'
+    webhook_configs:
+      - url: '${N8N_WEBHOOK_URL_MONITORING:-http://n8n:5678/webhook/monitoring-alerts}'
+        send_resolved: true
+        title: '📊 Monitoramento: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          📊 **Alerta de Monitoramento**
+          
+          {{ range .Alerts }}
+          **Alerta:** {{ .Annotations.summary }}
+          **Serviço:** {{ .Labels.job }}
+          **Descrição:** {{ .Annotations.description }}
+          **Status:** {{ .Status }}
+          {{ end }}
+  
+  # ALERTAS DE APLICAÇÃO
+  - name: 'application-alerts'
+    webhook_configs:
+      - url: '${N8N_WEBHOOK_URL_APP:-http://n8n:5678/webhook/application-alerts}'
+        send_resolved: true
+        title: '🚀 Aplicação: {{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+        text: |
+          🚀 **Alerta de Aplicação**
+          
+          {{ range .Alerts }}
+          **Alerta:** {{ .Annotations.summary }}
+          **Serviço:** {{ .Labels.service }}
+          **Ambiente:** {{ .Labels.environment }}
+          **Descrição:** {{ .Annotations.description }}
+          **Status:** {{ .Status }}
+          {{ end }}
+
+# === REGRAS DE INIBIÇÃO ===
+# Evita alertas redundantes e ruído
+inhibit_rules:
+  # Inibir alertas de warning quando há critical do mesmo tipo
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']
+  
+  # Inibir alertas de instância quando o host está down
+  - source_match:
+      alertname: 'InstanceDown'
+    target_match_re:
+      alertname: '^(NodeHighCPU|NodeHighMemory|NodeDiskSpace).*'
+    equal: ['instance']
+  
+  # Inibir alertas de interface quando dispositivo SNMP está down
+  - source_match:
+      alertname: 'SNMPDeviceDown'
+    target_match_re:
+      alertname: '^(NetworkInterface|NetworkHighTraffic).*'
+    equal: ['instance']
+  
+  # Inibir alertas de container quando o node está com problemas
+  - source_match_re:
+      alertname: '^Node.*'
+    target_match_re:
+      alertname: '^Container.*'
+    equal: ['instance']
+
+# === CONFIGURAÇÕES AVANÇADAS ===
+
+# Configuração de templates globais
+global:
+  # Configurações adicionais de HTTP
+  http_config:
+    # Timeout para webhooks
+    timeout: 30s
+    # Retry em caso de falha
+    max_retries: 3
+
+# === NOTAS DE CONFIGURAÇÃO ===
+#
+# 1. WEBHOOKS:
+#    - n8n recebe todos os alertas e redistribui para Teams/Email
+#    - URLs configuráveis via variáveis de ambiente
+#    - send_resolved: true para notificar quando alerta é resolvido
+#
+# 2. AGRUPAMENTO:
+#    - group_by: agrupa alertas similares
+#    - group_wait: tempo para aguardar mais alertas no grupo
+#    - group_interval: intervalo para novos alertas no grupo existente
+#    - repeat_interval: intervalo para reenvio do mesmo alerta
+#
+# 3. ROTEAMENTO:
+#    - Rotas são avaliadas em ordem
+#    - continue: true permite que alerta passe para próximas rotas
+#    - match/match_re: critérios para aplicar a rota
+#
+# 4. INIBIÇÃO:
+#    - Evita spam de alertas relacionados
+#    - source_match: alerta que inibe
+#    - target_match: alerta que é inibido
+#    - equal: labels que devem ser iguais
+#
+# 5. SEGURANÇA:
+#    - Use variáveis de ambiente para credenciais
+#    - Configure TLS quando possível
+#    - Limite acesso por firewall
+#
+# 6. TEMPLATES:
+#    - Personalize mensagens por tipo de alerta
+#    - Use emojis para facilitar identificação
+#    - Inclua informações acionáveis

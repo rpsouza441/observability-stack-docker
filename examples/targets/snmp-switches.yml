@@ -1,0 +1,217 @@
+# Switches e Dispositivos de Rede SNMP
+# Este arquivo define grupos de dispositivos de rede para monitoramento via SNMP
+
+# Core Switches - Cisco
+- targets:
+    - '10.0.0.1'   # core-switch-01
+    - '10.0.0.2'   # core-switch-02
+  labels:
+    environment: 'production'
+    team: 'network'
+    device_type: 'switch'
+    vendor: 'cisco'
+    model: 'catalyst-3850'
+    datacenter: 'dc1'
+    snmp_module: 'cisco_ios'
+    role: 'core'
+    redundancy: 'active-active'
+    critical: 'true'
+    backup_schedule: 'daily'
+
+# Distribution Switches - Cisco
+- targets:
+    - '10.0.0.10'  # dist-switch-01
+    - '10.0.0.11'  # dist-switch-02
+    - '10.0.0.12'  # dist-switch-03
+  labels:
+    environment: 'production'
+    team: 'network'
+    device_type: 'switch'
+    vendor: 'cisco'
+    model: 'catalyst-2960'
+    datacenter: 'dc1'
+    snmp_module: 'cisco_ios'
+    role: 'distribution'
+    redundancy: 'spanning-tree'
+    backup_schedule: 'daily'
+
+# Access Switches - Ubiquiti UniFi
+- targets:
+    - '10.0.0.20'  # access-switch-01
+    - '10.0.0.21'  # access-switch-02
+    - '10.0.0.22'  # access-switch-03
+    - '10.0.0.23'  # access-switch-04
+  labels:
+    environment: 'production'
+    team: 'network'
+    device_type: 'switch'
+    vendor: 'ubiquiti'
+    model: 'unifi-switch-24'
+    datacenter: 'dc1'
+    snmp_module: 'unifi'
+    role: 'access'
+    management: 'unifi-controller'
+    backup_schedule: 'weekly'
+
+# Firewall - pfSense
+- targets:
+    - '10.0.0.254' # firewall-01
+    - '10.0.0.253' # firewall-02 (backup)
+  labels:
+    environment: 'production'
+    team: 'security'
+    device_type: 'firewall'
+    vendor: 'pfsense'
+    model: 'sg-3100'
+    datacenter: 'dc1'
+    snmp_module: 'pfsense'
+    role: 'security'
+    redundancy: 'active-passive'
+    critical: 'true'
+    backup_schedule: 'daily'
+
+# Routers - MikroTik
+- targets:
+    - '10.0.0.100' # router-01
+    - '10.0.0.101' # router-02
+  labels:
+    environment: 'production'
+    team: 'network'
+    device_type: 'router'
+    vendor: 'mikrotik'
+    model: 'ccr1009'
+    datacenter: 'dc1'
+    snmp_module: 'mikrotik'
+    role: 'routing'
+    protocol: 'bgp,ospf'
+    backup_schedule: 'daily'
+
+# Wireless Access Points - Ubiquiti
+- targets:
+    - '10.0.0.30'  # ap-01
+    - '10.0.0.31'  # ap-02
+    - '10.0.0.32'  # ap-03
+    - '10.0.0.33'  # ap-04
+    - '10.0.0.34'  # ap-05
+  labels:
+    environment: 'production'
+    team: 'network'
+    device_type: 'wireless_ap'
+    vendor: 'ubiquiti'
+    model: 'unifi-ap-ac-pro'
+    datacenter: 'dc1'
+    snmp_module: 'unifi'
+    role: 'wireless'
+    frequency: '2.4ghz,5ghz'
+    management: 'unifi-controller'
+    backup_schedule: 'weekly'
+
+# Load Balancers - HAProxy
+- targets:
+    - '10.0.0.50'  # lb-01
+    - '10.0.0.51'  # lb-02
+  labels:
+    environment: 'production'
+    team: 'infrastructure'
+    device_type: 'load_balancer'
+    vendor: 'haproxy'
+    model: 'software'
+    datacenter: 'dc1'
+    snmp_module: 'linux'
+    role: 'load_balancing'
+    redundancy: 'active-active'
+    critical: 'true'
+    backup_schedule: 'daily'
+
+# UPS - APC
+- targets:
+    - '10.0.0.200' # ups-01
+    - '10.0.0.201' # ups-02
+  labels:
+    environment: 'production'
+    team: 'facilities'
+    device_type: 'ups'
+    vendor: 'apc'
+    model: 'smart-ups-3000'
+    datacenter: 'dc1'
+    snmp_module: 'apc_ups'
+    role: 'power'
+    capacity: '3000va'
+    critical: 'true'
+    backup_schedule: 'daily'
+
+# Network Storage - Synology NAS
+- targets:
+    - '10.0.0.150' # nas-01
+    - '10.0.0.151' # nas-02
+  labels:
+    environment: 'production'
+    team: 'storage'
+    device_type: 'nas'
+    vendor: 'synology'
+    model: 'ds920+'
+    datacenter: 'dc1'
+    snmp_module: 'synology'
+    role: 'storage'
+    raid_level: 'raid5'
+    backup_schedule: 'daily'
+
+# Printers - HP
+- targets:
+    - '10.0.0.180' # printer-01
+    - '10.0.0.181' # printer-02
+    - '10.0.0.182' # printer-03
+  labels:
+    environment: 'production'
+    team: 'facilities'
+    device_type: 'printer'
+    vendor: 'hp'
+    model: 'laserjet-pro'
+    datacenter: 'dc1'
+    snmp_module: 'printer_mib'
+    role: 'printing'
+    backup_schedule: 'none'
+
+# Staging Network Devices
+- targets:
+    - '10.0.10.1'  # staging-switch-01
+    - '10.0.10.2'  # staging-router-01
+  labels:
+    environment: 'staging'
+    team: 'network'
+    device_type: 'switch,router'
+    vendor: 'cisco,mikrotik'
+    datacenter: 'dc1'
+    snmp_module: 'cisco_ios,mikrotik'
+    role: 'testing'
+    backup_schedule: 'weekly'
+
+# Edge Network Devices
+- targets:
+    - '10.0.9.1'   # edge-router-01
+    - '10.0.9.2'   # edge-switch-01
+  labels:
+    environment: 'production'
+    team: 'network'
+    device_type: 'router,switch'
+    vendor: 'mikrotik,ubiquiti'
+    datacenter: 'edge-dc1'
+    snmp_module: 'mikrotik,unifi'
+    role: 'edge'
+    location: 'remote'
+    backup_schedule: 'weekly'
+
+# Notas de Configuração:
+# - Targets são IPs dos dispositivos (sem porta, SNMP usa 161)
+# - snmp_module: define qual módulo usar no SNMP Exporter
+# - device_type: switch, router, firewall, wireless_ap, ups, nas, printer
+# - vendor: fabricante do dispositivo
+# - model: modelo específico do dispositivo
+# - role: função do dispositivo na rede
+# - redundancy: tipo de redundância configurada
+# - critical: marca dispositivos críticos
+# - protocol: protocolos de roteamento (para routers)
+# - frequency: bandas de frequência (para APs wireless)
+# - capacity: capacidade (para UPS)
+# - raid_level: nível de RAID (para storage)
+# - location: localização física (datacenter, edge, remote)

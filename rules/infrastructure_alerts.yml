@@ -1,0 +1,115 @@
+# Regras de Alerta para Infraestrutura
+# Inclui alertas para serviços down, alta utilização de recursos, etc.
+
+groups:
+  - name: infrastructure.rules
+    rules:
+      # Instância/Serviço indisponível
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instância {{ $labels.instance }} está indisponível"
+          description: "A instância {{ $labels.instance }} do job {{ $labels.job }} está down por mais de 1 minuto."
+
+      # Alta utilização de CPU
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alta utilização de CPU na instância {{ $labels.instance }}"
+          description: "CPU usage está acima de 80% por mais de 5 minutos. Valor atual: {{ $value }}%"
+
+      # Alta utilização de CPU (crítico)
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Utilização crítica de CPU na instância {{ $labels.instance }}"
+          description: "CPU usage está acima de 95% por mais de 2 minutos. Valor atual: {{ $value }}%"
+
+      # Alta utilização de memória
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alta utilização de memória na instância {{ $labels.instance }}"
+          description: "Uso de memória está acima de 80% por mais de 5 minutos. Valor atual: {{ $value }}%"
+
+      # Utilização crítica de memória
+      - alert: CriticalMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Utilização crítica de memória na instância {{ $labels.instance }}"
+          description: "Uso de memória está acima de 95% por mais de 2 minutos. Valor atual: {{ $value }}%"
+
+      # Pouco espaço em disco
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pouco espaço em disco na instância {{ $labels.instance }}"
+          description: "Espaço em disco está acima de 80% no filesystem {{ $labels.mountpoint }}. Valor atual: {{ $value }}%"
+
+      # Espaço em disco crítico
+      - alert: DiskSpaceCritical
+        expr: (1 - (node_filesystem_avail_bytes{fstype!="tmpfs"} / node_filesystem_size_bytes{fstype!="tmpfs"})) * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Espaço em disco crítico na instância {{ $labels.instance }}"
+          description: "Espaço em disco está acima de 95% no filesystem {{ $labels.mountpoint }}. Valor atual: {{ $value }}%"
+
+      # Load average alto
+      - alert: HighLoadAverage
+        expr: node_load1 > (count by(instance) (node_cpu_seconds_total{mode="idle"}) * 0.8)
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Load average alto na instância {{ $labels.instance }}"
+          description: "Load average (1m) está alto. Valor atual: {{ $value }}"
+
+      # Muitos containers parados
+      - alert: ContainerDown
+        expr: absent(container_last_seen) or (time() - container_last_seen) > 60
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} está down"
+          description: "Container {{ $labels.name }} na instância {{ $labels.instance }} não está respondendo."
+
+      # Alta utilização de CPU em containers
+      - alert: ContainerHighCPU
+        expr: (rate(container_cpu_usage_seconds_total[5m]) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto uso de CPU no container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} está usando mais de 80% de CPU. Valor atual: {{ $value }}%"
+
+      # Alta utilização de memória em containers
+      - alert: ContainerHighMemory
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto uso de memória no container {{ $labels.name }}"
+          description: "Container {{ $labels.name }} está usando mais de 80% da memória limite. Valor atual: {{ $value }}%"

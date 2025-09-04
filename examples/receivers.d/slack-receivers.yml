@@ -1,0 +1,390 @@
+# ============================================================================
+# SLACK RECEIVERS - CONFIGURAÇÃO MODULAR
+# ============================================================================
+# Este arquivo contém configurações específicas para receivers do Slack,
+# organizados por equipe e tipo de alerta.
+#
+# NOTA: O Alertmanager não suporta includes nativamente para receivers.
+# Este arquivo serve como referência para implementação via:
+# - Ferramentas de templating (Helm, Ansible, Jinja2)
+# - Scripts de deployment que concatenam arquivos
+# - Ferramentas de CI/CD que processam configurações modulares
+# ============================================================================
+
+# ========================================
+# CONFIGURAÇÕES SLACK GLOBAIS
+# ========================================
+# Variáveis de ambiente necessárias:
+# - SLACK_WEBHOOK_URL: Webhook principal
+# - SLACK_SRE_WEBHOOK: Webhook da equipe SRE
+# - SLACK_DEV_WEBHOOK: Webhook da equipe Dev
+# - SLACK_PROD_WEBHOOK: Webhook para produção
+# - SLACK_STAGING_WEBHOOK: Webhook para staging
+# - SLACK_MONITORING_WEBHOOK: Webhook para monitoramento
+# - SLACK_DBA_WEBHOOK: Webhook para DBAs
+# - SLACK_WEBAPP_WEBHOOK: Webhook para webapp
+# - SLACK_API_WEBHOOK: Webhook para API
+# - SLACK_TEST_WEBHOOK: Webhook para testes
+
+# ========================================
+# RECEIVERS SLACK - CRÍTICOS
+# ========================================
+
+# Alertas críticos gerais
+critical-alerts-slack:
+  slack_configs:
+    - api_url: '${SLACK_WEBHOOK_URL}'
+      channel: '#critical-alerts'
+      title: '🔴 CRITICAL: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        **{{ .Annotations.summary }}**
+        
+        • **Severity:** {{ .Labels.severity | upper }}
+        • **Instance:** {{ .Labels.instance }}
+        • **Team:** {{ .Labels.team }}
+        • **Environment:** {{ .Labels.environment }}
+        
+        {{ .Annotations.description }}
+        
+        <{{ .Annotations.runbook_url }}|📖 Runbook> | Alert ID: `{{ .Annotations.alert_id }}`
+        {{ end }}
+      color: 'danger'
+      send_resolved: true
+      title_link: 'http://alertmanager.company.com'
+      footer: 'Alertmanager'
+      footer_icon: 'https://prometheus.io/assets/favicons/android-chrome-192x192.png'
+
+# SRE - Alertas críticos
+sre-critical-slack:
+  slack_configs:
+    - api_url: '${SLACK_SRE_WEBHOOK}'
+      channel: '#sre-critical'
+      title: '🚨 SRE CRITICAL: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        **{{ .Annotations.summary }}**
+        
+        • **Instance:** {{ .Labels.instance }}
+        • **Environment:** {{ .Labels.environment }}
+        • **Started:** {{ .StartsAt.Format "15:04:05" }}
+        
+        {{ .Annotations.description }}
+        
+        **Actions:**
+        • Check runbook: {{ .Annotations.runbook_url }}
+        • Alert ID: `{{ .Annotations.alert_id }}`
+        • Escalate if needed: @sre-oncall
+        {{ end }}
+      color: 'danger'
+      send_resolved: true
+      actions:
+        - type: 'button'
+          text: '🔍 View in Grafana'
+          url: 'http://grafana.company.com/d/node-exporter'
+        - type: 'button'
+          text: '📊 View in Prometheus'
+          url: 'http://prometheus.company.com/alerts'
+
+# Development - Alertas críticos
+dev-critical-slack:
+  slack_configs:
+    - api_url: '${SLACK_DEV_WEBHOOK}'
+      channel: '#dev-critical'
+      title: '🔴 DEV CRITICAL: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        **{{ .Annotations.summary }}**
+        
+        • **Service:** {{ .Labels.service }}
+        • **Instance:** {{ .Labels.instance }}
+        • **Environment:** {{ .Labels.environment }}
+        
+        {{ .Annotations.description }}
+        
+        <{{ .Annotations.runbook_url }}|📖 Runbook>
+        {{ end }}
+      color: 'danger'
+      send_resolved: true
+      fields:
+        - title: 'Service'
+          value: '{{ .GroupLabels.service }}'
+          short: true
+        - title: 'Environment'
+          value: '{{ .GroupLabels.environment }}'
+          short: true
+
+# ========================================
+# RECEIVERS SLACK - REGULARES
+# ========================================
+
+# SRE - Notificações regulares
+sre-notifications-slack:
+  slack_configs:
+    - api_url: '${SLACK_SRE_WEBHOOK}'
+      channel: '#sre-alerts'
+      title: '{{ .GroupLabels.severity | upper }}: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **Instance:** {{ .Labels.instance }}
+        • **Environment:** {{ .Labels.environment }}
+        • **Team:** {{ .Labels.team }}
+        {{ end }}
+      color: '{{ if eq .GroupLabels.severity "warning" }}warning{{ else }}good{{ end }}'
+      send_resolved: true
+      short_fields: true
+
+# Development - Notificações regulares
+dev-notifications-slack:
+  slack_configs:
+    - api_url: '${SLACK_DEV_WEBHOOK}'
+      channel: '#dev-alerts'
+      title: '{{ .GroupLabels.severity | upper }}: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **Service:** {{ .Labels.service }}
+        • **Instance:** {{ .Labels.instance }}
+        • **Environment:** {{ .Labels.environment }}
+        {{ end }}
+      color: '{{ if eq .GroupLabels.severity "warning" }}warning{{ else }}good{{ end }}'
+      send_resolved: true
+      thumb_url: 'https://prometheus.io/assets/favicons/android-chrome-192x192.png'
+
+# ========================================
+# RECEIVERS SLACK - POR AMBIENTE
+# ========================================
+
+# Produção
+production-alerts-slack:
+  slack_configs:
+    - api_url: '${SLACK_PROD_WEBHOOK}'
+      channel: '#production-alerts'
+      title: '🏭 PROD {{ .GroupLabels.severity | upper }}: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        **{{ .Annotations.summary }}**
+        
+        • **Service:** {{ .Labels.service }}
+        • **Instance:** {{ .Labels.instance }}
+        • **Started:** {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+        
+        {{ .Annotations.description }}
+        
+        **Runbook:** {{ .Annotations.runbook_url }}
+        {{ end }}
+      color: '{{ if eq .GroupLabels.severity "critical" }}danger{{ else if eq .GroupLabels.severity "warning" }}warning{{ else }}good{{ end }}'
+      send_resolved: true
+      fields:
+        - title: 'Priority'
+          value: '{{ .GroupLabels.priority | default "P2" }}'
+          short: true
+        - title: 'Team'
+          value: '{{ .GroupLabels.team }}'
+          short: true
+
+# Staging
+staging-alerts-slack:
+  slack_configs:
+    - api_url: '${SLACK_STAGING_WEBHOOK}'
+      channel: '#staging-alerts'
+      title: '🧪 STAGING: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **Service:** {{ .Labels.service }}
+        • **Instance:** {{ .Labels.instance }}
+        {{ end }}
+      color: 'warning'
+      send_resolved: true
+      icon_emoji: ':warning:'
+
+# Development environment
+dev-environment-slack:
+  slack_configs:
+    - api_url: '${SLACK_DEV_WEBHOOK}'
+      channel: '#dev-environment'
+      title: '🔧 DEV: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **Service:** {{ .Labels.service }}
+        • **Instance:** {{ .Labels.instance }}
+        {{ end }}
+      color: 'good'
+      send_resolved: true
+      icon_emoji: ':hammer_and_wrench:'
+
+# ========================================
+# RECEIVERS SLACK - POR SERVIÇO
+# ========================================
+
+# Monitoramento
+monitoring-team-slack:
+  slack_configs:
+    - api_url: '${SLACK_MONITORING_WEBHOOK}'
+      channel: '#monitoring-alerts'
+      title: '📊 MONITORING: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **Component:** {{ .Labels.job }}
+        • **Instance:** {{ .Labels.instance }}
+        • **Status:** {{ if eq .Status "firing" }}🔥 FIRING{{ else }}✅ RESOLVED{{ end }}
+        {{ end }}
+      color: 'warning'
+      send_resolved: true
+      actions:
+        - type: 'button'
+          text: '🔍 Check Prometheus'
+          url: 'http://prometheus.company.com/targets'
+        - type: 'button'
+          text: '📊 Check Grafana'
+          url: 'http://grafana.company.com'
+
+# Database
+database-team-slack:
+  slack_configs:
+    - api_url: '${SLACK_DBA_WEBHOOK}'
+      channel: '#database-alerts'
+      title: '🗄️ DB: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **Database:** {{ .Labels.service }}
+        • **Instance:** {{ .Labels.instance }}
+        • **Type:** {{ .Labels.db_type | default "Unknown" }}
+        {{ end }}
+      color: 'warning'
+      send_resolved: true
+      fields:
+        - title: 'Database Type'
+          value: '{{ .GroupLabels.db_type | default "Generic" }}'
+          short: true
+        - title: 'Severity'
+          value: '{{ .GroupLabels.severity | upper }}'
+          short: true
+
+# Web Application
+webapp-team-slack:
+  slack_configs:
+    - api_url: '${SLACK_WEBAPP_WEBHOOK}'
+      channel: '#webapp-alerts'
+      title: '🌐 WEBAPP: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **Application:** {{ .Labels.service }}
+        • **Instance:** {{ .Labels.instance }}
+        • **URL:** {{ .Labels.url | default "N/A" }}
+        {{ end }}
+      color: 'warning'
+      send_resolved: true
+      actions:
+        - type: 'button'
+          text: '🌐 Check Application'
+          url: '{{ .GroupLabels.url | default "http://webapp.company.com" }}'
+
+# API Services
+api-team-slack:
+  slack_configs:
+    - api_url: '${SLACK_API_WEBHOOK}'
+      channel: '#api-alerts'
+      title: '🔌 API: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        {{ .Annotations.summary }}
+        
+        • **API:** {{ .Labels.service }}
+        • **Endpoint:** {{ .Labels.endpoint | default "N/A" }}
+        • **Instance:** {{ .Labels.instance }}
+        • **Method:** {{ .Labels.method | default "N/A" }}
+        {{ end }}
+      color: 'warning'
+      send_resolved: true
+      fields:
+        - title: 'API Version'
+          value: '{{ .GroupLabels.version | default "v1" }}'
+          short: true
+        - title: 'Response Code'
+          value: '{{ .GroupLabels.code | default "N/A" }}'
+          short: true
+
+# ========================================
+# RECEIVERS SLACK - ESPECIAIS
+# ========================================
+
+# Testes
+test-notifications-slack:
+  slack_configs:
+    - api_url: '${SLACK_TEST_WEBHOOK}'
+      channel: '#alertmanager-tests'
+      title: '🧪 TEST ALERT: {{ .GroupLabels.alertname }}'
+      text: |
+        {{ range .Alerts }}
+        **Test Alert Triggered**
+        
+        • **Alert:** {{ .Annotations.summary }}
+        • **Time:** {{ .StartsAt.Format "2006-01-02 15:04:05" }}
+        • **Status:** {{ .Status }}
+        {{ end }}
+      color: 'good'
+      send_resolved: true
+      icon_emoji: ':test_tube:'
+
+# ============================================================================
+# CONFIGURAÇÃO DE TEMPLATES SLACK
+# ============================================================================
+#
+# 1. CAMPOS DISPONÍVEIS:
+#    - .GroupLabels: Labels agrupados do alerta
+#    - .CommonLabels: Labels comuns a todos os alertas
+#    - .CommonAnnotations: Annotations comuns
+#    - .Alerts: Array de alertas individuais
+#    - .Status: Status do grupo (firing/resolved)
+#
+# 2. FORMATAÇÃO SLACK:
+#    - **texto**: Negrito
+#    - _texto_: Itálico
+#    - `código`: Código inline
+#    - ```código```: Bloco de código
+#    - <url|texto>: Link com texto personalizado
+#    - @channel, @here: Menções especiais
+#    - :emoji:: Emojis
+#
+# 3. CORES RECOMENDADAS:
+#    - danger: Vermelho (crítico)
+#    - warning: Amarelo (warning)
+#    - good: Verde (info/resolved)
+#    - #FF0000: Cores customizadas em hex
+#
+# 4. AÇÕES E BOTÕES:
+#    - Máximo 5 ações por mensagem
+#    - Tipos: button, select
+#    - URLs devem ser HTTPS quando possível
+#
+# 5. CAMPOS E ATTACHMENTS:
+#    - short: true/false para campos lado a lado
+#    - thumb_url: Thumbnail pequeno
+#    - image_url: Imagem grande
+#    - footer: Texto no rodapé
+#
+# 6. VARIÁVEIS DE AMBIENTE:
+#    - Sempre use ${VAR} para secrets
+#    - Configure fallbacks quando apropriado
+#    - Documente todas as variáveis necessárias
+#
+# 7. TESTE E VALIDAÇÃO:
+#    - Use canal de teste primeiro
+#    - Valide templates com dados reais
+#    - Teste resolução de alertas
+#    - Verifique formatação em mobile
+# ============================================================================

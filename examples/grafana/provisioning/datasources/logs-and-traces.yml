@@ -1,0 +1,299 @@
+# ============================================================================
+# GRAFANA DATASOURCES - LOGS E TRACES
+# ============================================================================
+# Configuração modular de datasources do Grafana para logs, traces e APM
+# Este arquivo define conexões com sistemas de observabilidade complementares
+# ============================================================================
+
+apiVersion: 1
+
+# ========================================
+# DATASOURCES DE LOGS
+# ========================================
+datasources:
+  # Loki - Logs Aggregation
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: true
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: "TraceID"
+          matcherRegex: "trace_id=(\\w+)"
+          url: "$${__value.raw}"
+          datasourceUid: jaeger
+        - name: "RequestID"
+          matcherRegex: "request_id=(\\w+)"
+          url: "$${__value.raw}"
+      alertmanagerUid: alertmanager
+    uid: loki
+    version: 1
+
+  # Elasticsearch - Logs e APM
+  - name: Elasticsearch
+    type: elasticsearch
+    access: proxy
+    url: http://elasticsearch:9200
+    database: "logstash-*"
+    isDefault: false
+    editable: true
+    jsonData:
+      interval: Daily
+      timeField: "@timestamp"
+      esVersion: "8.0.0"
+      maxConcurrentShardRequests: 5
+      logMessageField: "message"
+      logLevelField: "level"
+      includeFrozen: false
+    uid: elasticsearch
+    version: 1
+
+  # Fluentd/Fluent Bit Logs
+  - name: FluentBit-Logs
+    type: loki
+    access: proxy
+    url: http://fluent-bit:2020
+    isDefault: false
+    editable: true
+    jsonData:
+      maxLines: 500
+      derivedFields:
+        - name: "PodName"
+          matcherRegex: "pod_name=(\\w+)"
+          url: "$${__value.raw}"
+        - name: "Namespace"
+          matcherRegex: "namespace=(\\w+)"
+          url: "$${__value.raw}"
+    uid: fluentbit-logs
+    version: 1
+
+# ========================================
+# DATASOURCES DE TRACES
+# ========================================
+
+  # Jaeger - Distributed Tracing
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    url: http://jaeger:16686
+    isDefault: false
+    editable: true
+    jsonData:
+      tracesToLogs:
+        datasourceUid: loki
+        tags: ['job', 'instance', 'pod', 'namespace']
+        mappedTags: [{ key: 'service.name', value: 'service' }]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: '1h'
+        spanEndTimeShift: '-1h'
+        filterByTraceID: true
+        filterBySpanID: false
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags: [{ key: 'service.name', value: 'service' }, { key: 'job' }]
+        queries:
+          - name: 'Sample query'
+            query: 'sum(rate(traces_spanmetrics_latency_bucket{$$__tags}[5m]))'
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      spanBar:
+        type: 'Tag'
+        tag: 'http.path'
+    uid: jaeger
+    version: 1
+
+  # Tempo - Grafana Tracing
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    isDefault: false
+    editable: true
+    jsonData:
+      tracesToLogs:
+        datasourceUid: loki
+        tags: ['job', 'instance']
+        mappedTags: [{ key: 'service.name', value: 'service' }]
+        mapTagNamesEnabled: true
+        spanStartTimeShift: '1h'
+        spanEndTimeShift: '-1h'
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags: [{ key: 'service.name', value: 'service' }]
+        queries:
+          - name: 'Sample query'
+            query: 'sum(rate(tempo_spanmetrics_latency_bucket{$$__tags}[5m]))'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
+    uid: tempo
+    version: 1
+
+  # Zipkin - Alternative Tracing
+  - name: Zipkin
+    type: zipkin
+    access: proxy
+    url: http://zipkin:9411
+    isDefault: false
+    editable: true
+    jsonData:
+      tracesToLogs:
+        datasourceUid: loki
+        tags: ['job', 'instance']
+      tracesToMetrics:
+        datasourceUid: prometheus
+        tags: [{ key: 'service.name', value: 'service' }]
+    uid: zipkin
+    version: 1
+
+# ========================================
+# DATASOURCES DE APM
+# ========================================
+
+  # Elastic APM
+  - name: Elastic-APM
+    type: apm
+    access: proxy
+    url: http://apm-server:8200
+    isDefault: false
+    editable: true
+    jsonData:
+      serviceName: "*"
+      environment: "production"
+    uid: elastic-apm
+    version: 1
+
+# ========================================
+# DATASOURCES DE PROFILING
+# ========================================
+
+  # Pyroscope - Continuous Profiling
+  - name: Pyroscope
+    type: pyroscope
+    access: proxy
+    url: http://pyroscope:4040
+    isDefault: false
+    editable: true
+    jsonData:
+      minStep: '15s'
+    uid: pyroscope
+    version: 1
+
+  # Parca - eBPF Profiling
+  - name: Parca
+    type: parca
+    access: proxy
+    url: http://parca:7070
+    isDefault: false
+    editable: true
+    uid: parca
+    version: 1
+
+# ========================================
+# DATASOURCES EXTERNOS
+# ========================================
+
+  # CloudWatch (AWS)
+  - name: CloudWatch
+    type: cloudwatch
+    access: proxy
+    isDefault: false
+    editable: true
+    jsonData:
+      authType: 'keys'
+      defaultRegion: 'us-east-1'
+      customMetricsNamespaces: 'AWS/ApplicationELB,AWS/ELB,AWS/EC2,AWS/RDS'
+      assumeRoleArn: ''
+    secureJsonData:
+      accessKey: '${AWS_ACCESS_KEY_ID}'
+      secretKey: '${AWS_SECRET_ACCESS_KEY}'
+    uid: cloudwatch
+    version: 1
+
+  # Azure Monitor
+  - name: Azure-Monitor
+    type: grafana-azure-monitor-datasource
+    access: proxy
+    isDefault: false
+    editable: true
+    jsonData:
+      azureAuthType: 'msi'
+      subscriptionId: '${AZURE_SUBSCRIPTION_ID}'
+      tenantId: '${AZURE_TENANT_ID}'
+      clientId: '${AZURE_CLIENT_ID}'
+      cloudName: 'azuremonitor'
+    secureJsonData:
+      clientSecret: '${AZURE_CLIENT_SECRET}'
+    uid: azure-monitor
+    version: 1
+
+  # Google Cloud Monitoring
+  - name: Google-Cloud-Monitoring
+    type: stackdriver
+    access: proxy
+    isDefault: false
+    editable: true
+    jsonData:
+      authenticationType: 'gce'
+      defaultProject: '${GCP_PROJECT_ID}'
+    secureJsonData:
+      privateKey: '${GCP_PRIVATE_KEY}'
+    uid: gcp-monitoring
+    version: 1
+
+# ============================================================================
+# CONFIGURAÇÕES DE CORRELAÇÃO
+# ============================================================================
+#
+# 1. LOGS TO TRACES:
+#    - Configure derivedFields para extrair trace IDs dos logs
+#    - Use regex para capturar identificadores
+#    - Mapeie para datasources de tracing
+#
+# 2. TRACES TO LOGS:
+#    - Configure tracesToLogs para correlacionar traces com logs
+#    - Use tags comuns (service, instance, pod)
+#    - Configure time shifts apropriados
+#
+# 3. TRACES TO METRICS:
+#    - Configure tracesToMetrics para correlacionar com métricas
+#    - Use service.name e outros tags relevantes
+#    - Configure queries de exemplo
+#
+# 4. METRICS TO LOGS:
+#    - Use exemplars no Prometheus
+#    - Configure trace_id nos exemplars
+#    - Correlacione via datasource UIDs
+#
+# 5. SERVICE MAPS:
+#    - Configure serviceMap para visualização de dependências
+#    - Use métricas de span para construir mapas
+#    - Configure node graphs quando disponível
+#
+# 6. SEARCH CONFIGURATION:
+#    - Configure search capabilities para cada datasource
+#    - Use tags apropriados para filtragem
+#    - Configure Loki search para Tempo quando disponível
+#
+# 7. PERFORMANCE:
+#    - Configure timeouts apropriados
+#    - Limite maxLines para logs
+#    - Use intervalos adequados para cada tipo
+#    - Configure cache quando disponível
+#
+# 8. SEGURANÇA:
+#    - Use variáveis de ambiente para credenciais
+#    - Configure autenticação adequada
+#    - Implemente RBAC quando possível
+#    - Use service accounts para cloud providers
+# ============================================================================

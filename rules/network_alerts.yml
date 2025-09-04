@@ -1,0 +1,135 @@
+# Regras de Alerta para Dispositivos de Rede (SNMP)
+# Inclui alertas para switches, APs Unifi, pfSense, etc.
+
+groups:
+  - name: network.rules
+    rules:
+      # Dispositivo SNMP indisponível
+      - alert: SNMPDeviceDown
+        expr: up{job=~"snmp-.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dispositivo SNMP {{ $labels.instance }} está indisponível"
+          description: "O dispositivo {{ $labels.instance }} do job {{ $labels.job }} não está respondendo via SNMP há mais de 2 minutos."
+
+      # Interface de rede down
+      - alert: NetworkInterfaceDown
+        expr: ifOperStatus{job=~"snmp-.*"} == 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Interface {{ $labels.ifDescr }} down no dispositivo {{ $labels.instance }}"
+          description: "A interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está down."
+
+      # Interface crítica down (uplinks, trunks)
+      - alert: CriticalInterfaceDown
+        expr: ifOperStatus{job=~"snmp-.*",ifDescr=~".*[Uu]plink.*|.*[Tt]runk.*|.*[Gg]ig.*"} == 2
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Interface crítica {{ $labels.ifDescr }} down no dispositivo {{ $labels.instance }}"
+          description: "A interface crítica {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está down há mais de 30 segundos."
+
+      # Alto tráfego de entrada na interface
+      - alert: HighNetworkTrafficIn
+        expr: rate(ifInOctets[5m]) * 8 / ifSpeed > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto tráfego de entrada na interface {{ $labels.ifDescr }}"
+          description: "Interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está com mais de 80% de utilização de entrada. Valor atual: {{ $value | humanizePercentage }}"
+
+      # Alto tráfego de saída na interface
+      - alert: HighNetworkTrafficOut
+        expr: rate(ifOutOctets[5m]) * 8 / ifSpeed > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto tráfego de saída na interface {{ $labels.ifDescr }}"
+          description: "Interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está com mais de 80% de utilização de saída. Valor atual: {{ $value | humanizePercentage }}"
+
+      # Muitos erros na interface
+      - alert: NetworkInterfaceErrors
+        expr: rate(ifInErrors[5m]) + rate(ifOutErrors[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Muitos erros na interface {{ $labels.ifDescr }}"
+          description: "Interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está apresentando muitos erros. Taxa atual: {{ $value }} erros/segundo"
+
+      # Muitos descartes na interface
+      - alert: NetworkInterfaceDiscards
+        expr: rate(ifInDiscards[5m]) + rate(ifOutDiscards[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Muitos descartes na interface {{ $labels.ifDescr }}"
+          description: "Interface {{ $labels.ifDescr }} no dispositivo {{ $labels.instance }} está descartando muitos pacotes. Taxa atual: {{ $value }} descartes/segundo"
+
+      # pfSense - Alto uso de CPU
+      - alert: pfSenseHighCPU
+        expr: 100 - ssCpuIdle{job="snmp-pfsense"} > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alto uso de CPU no pfSense {{ $labels.instance }}"
+          description: "pfSense {{ $labels.instance }} está com uso de CPU acima de 80%. Valor atual: {{ $value }}%"
+
+      # pfSense - Pouca memória disponível
+      - alert: pfSenseLowMemory
+        expr: (memAvailReal{job="snmp-pfsense"} / memTotalReal{job="snmp-pfsense"}) * 100 < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pouca memória disponível no pfSense {{ $labels.instance }}"
+          description: "pfSense {{ $labels.instance }} tem menos de 20% de memória disponível. Valor atual: {{ $value }}%"
+
+      # pfSense - Muitas conexões TCP
+      - alert: pfSenseHighTCPConnections
+        expr: tcpCurrEstab{job="snmp-pfsense"} > 10000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Muitas conexões TCP no pfSense {{ $labels.instance }}"
+          description: "pfSense {{ $labels.instance }} tem muitas conexões TCP estabelecidas. Valor atual: {{ $value }}"
+
+      # UniFi AP - Muitos clientes conectados
+      - alert: UniFiAPHighClientCount
+        expr: unifiVapNumStations{job="snmp-unifi-aps"} > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Muitos clientes no AP UniFi {{ $labels.instance }}"
+          description: "AP UniFi {{ $labels.instance }} tem mais de 50 clientes conectados no VAP {{ $labels.unifiVapName }}. Valor atual: {{ $value }}"
+
+      # Dispositivo com uptime muito baixo (possível reinicialização)
+      - alert: DeviceRecentReboot
+        expr: sysUpTime{job=~"snmp-.*"} / 100 < 300  # menos de 5 minutos
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dispositivo {{ $labels.instance }} foi reiniciado recentemente"
+          description: "O dispositivo {{ $labels.instance }} tem uptime de apenas {{ $value | humanizeDuration }}. Pode ter sido reiniciado."
+
+      # SNMP Exporter indisponível
+      - alert: SNMPExporterDown
+        expr: up{job="snmp_exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SNMP Exporter está indisponível"
+          description: "O SNMP Exporter não está respondendo. Todas as métricas SNMP serão perdidas."

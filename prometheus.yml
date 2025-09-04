@@ -1,0 +1,140 @@
+# Configuração do Prometheus para Stack de Observabilidade
+# Inclui coleta SNMP, exporters e targets diversos
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'observability-stack'
+    environment: 'production'
+
+# Configuração do Alertmanager
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Regras de alerta
+rule_files:
+  - "rules/*.yml"
+
+# Jobs de coleta de métricas
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Node Exporter - Métricas do sistema Linux/Windows
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node_exporter:9100']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # cAdvisor - Métricas de containers
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Windows Exporter - Métricas específicas do Windows
+  - job_name: 'windows-exporter'
+    static_configs:
+      - targets: 
+        # Adicione aqui os IPs dos servidores Windows com windows_exporter
+        # Exemplo: ['192.168.1.100:9182', '192.168.1.101:9182']
+        - targets: []
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # SNMP Exporter - Switches, APs Unifi, pfSense
+  - job_name: 'snmp-switches'
+    static_configs:
+      - targets:
+        # Adicione aqui os IPs dos switches
+        # Exemplo: ['192.168.1.10', '192.168.1.11']
+        - targets: []
+    metrics_path: /snmp
+    params:
+      module: [if_mib]  # Módulo para interfaces de rede
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: snmp_exporter:9116
+
+  - job_name: 'snmp-unifi-aps'
+    static_configs:
+      - targets:
+        # Adicione aqui os IPs dos APs Unifi
+        # Exemplo: ['192.168.1.20', '192.168.1.21']
+        - targets: []
+    metrics_path: /snmp
+    params:
+      module: [ubiquiti_unifi]  # Módulo específico para Unifi
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: snmp_exporter:9116
+
+  - job_name: 'snmp-pfsense'
+    static_configs:
+      - targets:
+        # Adicione aqui o IP do pfSense
+        # Exemplo: ['192.168.1.1']
+        - targets: []
+    metrics_path: /snmp
+    params:
+      module: [pfsense]  # Módulo específico para pfSense
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: snmp_exporter:9116
+
+  # Grafana - Monitoramento do próprio Grafana
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Alertmanager - Monitoramento do Alertmanager
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Descoberta automática de serviços Docker (opcional)
+  - job_name: 'docker-containers'
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: [__meta_docker_container_label_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_docker_container_label_prometheus_io_path]
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_docker_container_label_prometheus_io_port]
+        target_label: __address__
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+      - source_labels: [__meta_docker_container_name]
+        target_label: container_name
+        regex: /(.*)
+        replacement: $1

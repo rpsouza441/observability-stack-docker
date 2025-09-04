@@ -1,0 +1,166 @@
+# Hosts Docker com cAdvisor
+# Este arquivo define grupos de hosts para monitoramento de containers
+
+# Docker Hosts - Produção Web
+- targets:
+    - '10.0.1.10:8080'  # docker-web-01
+    - '10.0.1.11:8080'  # docker-web-02
+    - '10.0.1.12:8080'  # docker-web-03
+  labels:
+    environment: 'production'
+    team: 'platform'
+    service: 'web-containers'
+    datacenter: 'dc1'
+    container_runtime: 'docker'
+    orchestrator: 'docker-compose'
+    role: 'frontend'
+    backup_schedule: 'daily'
+
+# Docker Hosts - Aplicações Backend
+- targets:
+    - '10.0.2.10:8080'  # docker-app-01
+    - '10.0.2.11:8080'  # docker-app-02
+    - '10.0.2.12:8080'  # docker-app-03
+  labels:
+    environment: 'production'
+    team: 'platform'
+    service: 'app-containers'
+    datacenter: 'dc1'
+    container_runtime: 'docker'
+    orchestrator: 'docker-swarm'
+    role: 'backend'
+    backup_schedule: 'daily'
+
+# Kubernetes Nodes
+- targets:
+    - '10.0.6.10:8080'  # k8s-worker-01
+    - '10.0.6.11:8080'  # k8s-worker-02
+    - '10.0.6.12:8080'  # k8s-worker-03
+  labels:
+    environment: 'production'
+    team: 'platform'
+    service: 'kubernetes'
+    datacenter: 'dc1'
+    container_runtime: 'containerd'
+    orchestrator: 'kubernetes'
+    role: 'worker'
+    k8s_version: 'v1.28.0'
+    backup_schedule: 'daily'
+
+# Kubernetes Master Nodes
+- targets:
+    - '10.0.6.1:8080'   # k8s-master-01
+    - '10.0.6.2:8080'   # k8s-master-02
+    - '10.0.6.3:8080'   # k8s-master-03
+  labels:
+    environment: 'production'
+    team: 'platform'
+    service: 'kubernetes'
+    datacenter: 'dc1'
+    container_runtime: 'containerd'
+    orchestrator: 'kubernetes'
+    role: 'master'
+    k8s_version: 'v1.28.0'
+    backup_schedule: 'hourly'
+    critical: 'true'
+
+# Docker Hosts - Microserviços
+- targets:
+    - '10.0.7.10:8080'  # microservices-01
+    - '10.0.7.11:8080'  # microservices-02
+    - '10.0.7.12:8080'  # microservices-03
+  labels:
+    environment: 'production'
+    team: 'microservices'
+    service: 'microservices'
+    datacenter: 'dc1'
+    container_runtime: 'docker'
+    orchestrator: 'docker-compose'
+    role: 'microservices'
+    backup_schedule: 'daily'
+    architecture: 'microservices'
+
+# Docker Hosts - Staging
+- targets:
+    - '10.0.10.20:8080'  # staging-docker-01
+    - '10.0.10.21:8080'  # staging-docker-02
+  labels:
+    environment: 'staging'
+    team: 'qa'
+    service: 'staging-containers'
+    datacenter: 'dc1'
+    container_runtime: 'docker'
+    orchestrator: 'docker-compose'
+    role: 'testing'
+    backup_schedule: 'weekly'
+
+# Docker Hosts - Desenvolvimento
+- targets:
+    - '10.0.20.20:8080'  # dev-docker-01
+    - '10.0.20.21:8080'  # dev-docker-02
+  labels:
+    environment: 'development'
+    team: 'development'
+    service: 'dev-containers'
+    datacenter: 'dc1'
+    container_runtime: 'docker'
+    orchestrator: 'docker-compose'
+    role: 'development'
+    backup_schedule: 'none'
+    auto_shutdown: 'true'
+
+# Docker Hosts - CI/CD
+- targets:
+    - '10.0.8.10:8080'  # ci-runner-01
+    - '10.0.8.11:8080'  # ci-runner-02
+    - '10.0.8.12:8080'  # ci-runner-03
+  labels:
+    environment: 'production'
+    team: 'devops'
+    service: 'ci-cd'
+    datacenter: 'dc1'
+    container_runtime: 'docker'
+    orchestrator: 'gitlab-runner'
+    role: 'ci-cd'
+    backup_schedule: 'daily'
+    runner_type: 'docker'
+
+# Docker Hosts - Monitoramento
+- targets:
+    - '10.0.5.10:8080'  # monitoring-docker-01
+  labels:
+    environment: 'production'
+    team: 'sre'
+    service: 'monitoring-containers'
+    datacenter: 'dc1'
+    container_runtime: 'docker'
+    orchestrator: 'docker-compose'
+    role: 'observability'
+    backup_schedule: 'daily'
+    critical: 'true'
+
+# Edge Computing Nodes
+- targets:
+    - '10.0.9.10:8080'  # edge-node-01
+    - '10.0.9.11:8080'  # edge-node-02
+  labels:
+    environment: 'production'
+    team: 'edge'
+    service: 'edge-computing'
+    datacenter: 'edge-dc1'
+    container_runtime: 'docker'
+    orchestrator: 'k3s'
+    role: 'edge'
+    backup_schedule: 'daily'
+    location: 'remote'
+
+# Notas de Configuração:
+# - Porta 8080: cAdvisor padrão
+# - container_runtime: docker, containerd, cri-o
+# - orchestrator: docker-compose, docker-swarm, kubernetes, k3s
+# - role: define a função do host no ambiente
+# - k8s_version: versão do Kubernetes (quando aplicável)
+# - critical: marca hosts críticos para alertas especiais
+# - architecture: tipo de arquitetura (monolith, microservices)
+# - runner_type: tipo de runner CI/CD
+# - location: localização física (datacenter, edge, remote)
